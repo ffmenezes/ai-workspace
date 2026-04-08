@@ -211,4 +211,4 @@ ENV STARSHIP_CONFIG="/home/dev/.config/starship.toml"
 # Boot log: registra versão + timestamp no startup do container.
 # Surface via `docker logs <container>` (stdout) e via arquivo persistente
 # em /home/dev/.ai-workspace.log (writable pelo user dev).
-CMD ["bash", "-c", "echo \"[$(date -Iseconds)] AI Workspace started — version=${AI_WORKSPACE_VERSION} commit=${AI_WORKSPACE_COMMIT} build_date=${AI_WORKSPACE_BUILD_DATE}\" | tee -a /home/dev/.ai-workspace.log; tmux new-session -d -s main && tail -f /home/dev/.ai-workspace.log"]
+CMD ["bash", "-c", "echo \"[$(date -Iseconds)] AI Workspace started — version=${AI_WORKSPACE_VERSION} commit=${AI_WORKSPACE_COMMIT} build_date=${AI_WORKSPACE_BUILD_DATE}\" | tee -a /home/dev/.ai-workspace.log; if [ ! -f /home/dev/.claude.json ]; then LATEST=$(ls -t /home/dev/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1); if [ -n \"$LATEST\" ]; then cp \"$LATEST\" /home/dev/.claude.json && echo \"[$(date -Iseconds)] Restored ~/.claude.json from $LATEST\" | tee -a /home/dev/.ai-workspace.log; fi; fi; tmux new-session -d -s main && tail -f /home/dev/.ai-workspace.log"]

@@ -14,7 +14,7 @@ docker build -t ai-workspace:latest .
 # Deploy via Portainer (Stacks → Add Stack → colar aiworkspace.yaml)
 
 # 2. Instalar atalhos no host
-bash setup-host-aliases.sh && source ~/.bashrc
+curl -fsSL https://raw.githubusercontent.com/ffmenezes/ai-workspace/main/setup-host-aliases.sh | bash && source ~/.bashrc
 
 # 3. Entrar e autenticar (uma vez só)
 ai-enter
@@ -222,11 +222,14 @@ docker stack deploy -c aiworkspace.yaml aiworkspace
 
 ## Passo 5: Configurar aliases no host
 
+One-liner (não precisa clonar o repo):
+
 ```bash
-cd ~/ai-workspace
-bash setup-host-aliases.sh
+curl -fsSL https://raw.githubusercontent.com/ffmenezes/ai-workspace/main/setup-host-aliases.sh | bash
 source ~/.bashrc
 ```
+
+Mesmo comando serve pra **resetar** os aliases depois de updates — o script remove o bloco antigo do `~/.bashrc` antes de reescrever.
 
 Adiciona os atalhos `ai-enter`, `ai-attach`, `ai-dev`, `ai-dev-danger`, `ai-sessions`, `ai-kill`, `ai-kill-all`, `ai-fix-perms`, `ai-update` e `ai-help` ao host. Rode `ai-help` pra ver a referência completa.
 
