@@ -21,8 +21,7 @@ version: "3.7"
 
 services:
   workspace:
-    # ⚠️ TROQUE "SEU_USUARIO" pelo seu usuário do GitHub (lowercase)
-    image: ghcr.io/SEU_USUARIO/ai-workspace:latest
+    image: ghcr.io/ffmenezes/ai-workspace:latest
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
 
     stdin_open: true
