@@ -95,7 +95,7 @@ ai-fix-perms() {
 # Service name overridable via AI_WORKSPACE_SERVICE env var.
 ai-update() {
     local IMAGE="${1:-ghcr.io/ffmenezes/ai-workspace:latest}"
-    local SERVICE="${AI_WORKSPACE_SERVICE:-aiworkspace_workspace}"
+    local SERVICE="${AI_WORKSPACE_SERVICE:-aiworkspace_aiworkspace}"
 
     # Avisar se há sessões tmux que vão morrer no restart
     local CID; CID=$(_ai_container)

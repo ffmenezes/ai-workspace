@@ -8,10 +8,11 @@ Infra-as-code for a containerized multi-agent dev environment built around five 
 
 ## Build / deploy
 
-- Image build is automated by GitHub Actions (`.github/workflows/`) on push to `main`, publishing to `ghcr.io/ffmenezes/ai-workspace:latest`. Tag pushes (`vX.Y.Z`) also publish `X.Y.Z` and `X.Y` tags.
+- Image build is automated by GitHub Actions (`.github/workflows/build.yml`). Every push to `main` triggers an **auto-bump** of the patch version (`v0.x.y → v0.x.(y+1)`) via `mathieudutour/github-tag-action`, which creates and pushes the new tag back to the repo. The build then publishes `:latest`, `:main`, `:sha-<short>`, `:0.x.y` (the new patch), and `:0.x` (minor pin), and opens a GitHub Release marked as prerelease with auto-generated changelog. Tags pushed by `GITHUB_TOKEN` don't trigger workflows (GitHub safety), so there's no infinite loop.
+- **Versioning policy**: this project lives in **permanent v0.x beta**. There is no v1.0.0 and no plan to issue one. Patch bumps are automatic on every main push. Minor bumps (`v0.1.x → v0.2.0`) are manual and rare — done by pushing a tag explicitly when there's a meaningful behavioral change or new CLI. The "major" slot stays at 0 forever — semver's "anything goes in 0.x" applies.
 - Local build: `docker build -t ai-workspace:latest .`
 - Deploy: Portainer stack from `aiworkspace.yaml`, or `docker stack deploy -c aiworkspace.yaml aiworkspace`.
-- Runtime update on the VPS: `ai-update` (pulls `ghcr.io/ffmenezes/ai-workspace:latest` and force-updates the `aiworkspace_workspace` service; service name overridable via `AI_WORKSPACE_SERVICE` env var).
+- Runtime update on the VPS: `ai-update` (pulls `ghcr.io/ffmenezes/ai-workspace:latest` and force-updates the `aiworkspace_aiworkspace` service; service name overridable via `AI_WORKSPACE_SERVICE` env var).
 - There are no tests, linters, or package manager — changes are validated by building the image and running it.
 
 ## Architecture
@@ -54,6 +55,6 @@ When changing agent invocation, flags, or window layout, edit `scripts/ai-dev` a
 ## Conventions
 
 - README.md is in Portuguese and is the canonical user-facing doc — keep it in sync when changing flags, scripts, volume names, or the stack.
-- The GHCR image owner is hardcoded as `ffmenezes` in `setup-host-aliases.sh` (`ai-update` default) and throughout the README; forks must update both. The Swarm service name is also hardcoded as `aiworkspace_workspace` but is overridable via `AI_WORKSPACE_SERVICE` env var.
+- The GHCR image owner is hardcoded as `ffmenezes` in `setup-host-aliases.sh` (`ai-update` default) and throughout the README; forks must update both. The Swarm service name is also hardcoded as `aiworkspace_aiworkspace` but is overridable via `AI_WORKSPACE_SERVICE` env var.
 - Shell scripts target bash on Debian 12 inside the container (and bash on the Debian VPS host). Don't assume GNU-only flags work everywhere, but POSIX-strict isn't required.
 - This repo is developed on Windows (`win32`) but every script runs on Linux — use Unix line endings and forward slashes.

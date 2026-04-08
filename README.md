@@ -582,7 +582,7 @@ ai-update
 
 # O que ele faz por trás:
 docker pull ghcr.io/ffmenezes/ai-workspace:latest
-docker service update --image ghcr.io/ffmenezes/ai-workspace:latest --force aiworkspace_workspace
+docker service update --image ghcr.io/ffmenezes/ai-workspace:latest --force aiworkspace_aiworkspace
 ```
 
 A imagem é buildada automaticamente pelo GitHub Actions a cada push em `main`.
@@ -717,27 +717,70 @@ ssh sua-vps
 ai-update
 ```
 
-### Versionamento (tags)
+### Versionamento — v0.x beta permanente, auto-bump no CI
 
-Pra marcar releases estáveis:
+O projeto fica em **v0.x indefinidamente**. Não há plano de lançar v1.0.0
+— a versão major fica em 0 pra sempre, sinalizando que o projeto é uma
+ferramenta pessoal em evolução constante. Semver permite isso ("anything
+goes in 0.x").
+
+**Você não precisa marcar tag.** Cada `git push origin main` dispara o
+GitHub Actions, que:
+
+1. Lê a última tag `v0.x.y` do repo
+2. Bumpa o patch (`v0.1.5` → `v0.1.6`)
+3. Cria a tag nova e empurra de volta pro repo
+4. Builda a imagem e publica no GHCR
+5. Cria uma GitHub Release marcada como prerelease com changelog do diff
+
+**Quando bumpar minor manualmente** (raro):
+
+Quando você quiser sinalizar uma mudança maior (nova CLI, refator que muda
+comportamento, breaking change interna), force um minor bump pusheando uma
+tag manual:
 
 ```bash
-git tag v1.0.0
-git push --tags
+git tag v0.2.0
+git push origin main --tags
 ```
 
-A Action vai publicar 3 tags da imagem: `latest`, `1.0.0`, `1.0`. Aí
-outras pessoas podem fixar versão:
+A partir daí, o auto-bump continua de `v0.2.0` → `v0.2.1` → `v0.2.2` ...
+
+> **Detalhe técnico**: tags criadas pelo `GITHUB_TOKEN` do workflow **não
+> disparam outro workflow** (proteção do GitHub) — então não há loop infinito
+> mesmo com o auto-bump escrevendo de volta no repo.
+
+A Action publica automaticamente:
+
+| Tag da imagem | Quando recebe update | Uso típico |
+|---------------|----------------------|------------|
+| `:0.1.0` | nunca (pin exato) | produção que não pode mudar |
+| `:0.1` | a cada `v0.1.x` | "fica no minor 0.1 e me dê os patches" |
+| `:latest` | a cada push em main *ou* tag nova | dev/teste |
+| `:sha-abc1234` | nunca (pin por commit) | rollback granular sem precisar taguear |
+| `:main` | a cada push em main | bleeding edge |
+
+E cria uma **GitHub Release** marcada como prerelease com changelog
+auto-gerado do diff entre tags.
+
+**Pinar no `aiworkspace.yaml`**:
 
 ```yaml
-image: ghcr.io/ffmenezes/ai-workspace:1.0.0
+# Opção conservadora: pin exato, só atualiza com edição manual
+image: ghcr.io/ffmenezes/ai-workspace:0.1.0
+
+# Opção balanceada: recebe patches automaticamente
+image: ghcr.io/ffmenezes/ai-workspace:0.1
+
+# Opção cabeça-quente: sempre o último build
+image: ghcr.io/ffmenezes/ai-workspace:latest
 ```
 
-### Pull manual de versões específicas
+**Atualizar a VPS pra uma versão específica**:
 
 ```bash
-docker pull ghcr.io/ffmenezes/ai-workspace:1.0.0
-docker pull ghcr.io/ffmenezes/ai-workspace:latest
+ai-update ghcr.io/ffmenezes/ai-workspace:0.1.0
+ai-update ghcr.io/ffmenezes/ai-workspace:sha-abc1234   # rollback granular
 ```
 
 ---

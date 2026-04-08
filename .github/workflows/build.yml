@@ -16,12 +16,36 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write    # release precisa de write em contents
       packages: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tag bump e release notes precisam de histórico completo
+
+      # Auto-bump patch (v0.x.y → v0.x.(y+1)) em push pra main.
+      # Pulado em push de tag manual — nesse caso a tag já existe e a metadata
+      # usa o pattern semver direto. Tags criadas com GITHUB_TOKEN NÃO disparam
+      # outro workflow (proteção do GitHub) — logo, sem loop infinito.
+      - name: Auto-bump patch version
+        id: tag_version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          tag_prefix: v
+          release_branches: main
+
+      # Deriva o pin de minor (0.x) do new_version pra usar como tag adicional
+      - name: Compute minor pin
+        id: minor
+        if: steps.tag_version.outputs.new_version != ''
+        run: |
+          MINOR=$(echo "${{ steps.tag_version.outputs.new_version }}" | cut -d. -f1-2)
+          echo "value=$MINOR" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -38,11 +62,21 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Estratégia de versionamento — projeto fica em "v0.x permanente"
+          # (beta indefinido).
+          #
+          # Em push pra main:
+          #   :latest, :main, :sha-<short>, :<auto-bumped-version>, :<minor-pin>
+          # Em push de tag manual (vX.Y.Z, raro):
+          #   :latest, :X.Y.Z, :X.Y, :sha-<short>
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.tag_version.outputs.new_version }},enable=${{ steps.tag_version.outputs.new_version != '' }}
+            type=raw,value=${{ steps.minor.outputs.value }},enable=${{ steps.minor.outputs.value != '' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -53,3 +87,26 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Cria GitHub Release automaticamente.
+      # Dispara em DOIS cenários:
+      #   (a) auto-bump em push pra main (caso comum)
+      #   (b) push de tag v* manual (raro)
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || steps.tag_version.outputs.new_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag || github.ref_name }}
+          name: ${{ steps.tag_version.outputs.new_tag || github.ref_name }}
+          generate_release_notes: true  # changelog do diff entre tags
+          prerelease: true              # v0.x = beta permanente
+          body: |
+            Imagem publicada em:
+            - `ghcr.io/${{ github.repository }}:${{ steps.tag_version.outputs.new_version || steps.meta.outputs.version }}` (pin exato)
+            - `ghcr.io/${{ github.repository }}:${{ steps.minor.outputs.value || '' }}` (pin por minor, recebe patches)
+            - `ghcr.io/${{ github.repository }}:latest`
+
+            Pra atualizar na VPS:
+            ```bash
+            ai-update ghcr.io/${{ github.repository }}:${{ steps.tag_version.outputs.new_version || steps.meta.outputs.version }}
+            ```

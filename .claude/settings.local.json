@@ -15,7 +15,8 @@
       "Bash(bash -n setup-host-aliases.sh)",
       "Bash(bash -n scripts/ai-dev)",
       "Bash(bash -n scripts/ai-kill-all)",
-      "Bash(bash -n scripts/ralph)"
+      "Bash(bash -n scripts/ralph)",
+      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/build.yml'\\)\\)\")"
     ]
   }
 }
