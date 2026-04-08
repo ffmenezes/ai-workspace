@@ -1,0 +1,17 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# ai-kill — Encerra uma sessão de projeto
+# Uso: ai-kill <nome-do-projeto>
+# ══════════════════════════════════════════════════════════════
+
+PROJECT="${1:?Uso: ai-kill <nome-do-projeto>}"
+
+if tmux has-session -t "$PROJECT" 2>/dev/null; then
+    tmux kill-session -t "$PROJECT"
+    echo "🗑️  Sessão '$PROJECT' encerrada."
+else
+    echo "❌ Sessão '$PROJECT' não encontrada."
+    echo ""
+    echo "Sessões ativas:"
+    tmux ls 2>/dev/null || echo "   Nenhuma"
+fi

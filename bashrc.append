@@ -1,0 +1,30 @@
+
+# ══════════════════════════════════════════════════════════════
+# AI Workspace — aliases e config
+# ══════════════════════════════════════════════════════════════
+
+# Path
+export PATH="$HOME/bin:$HOME/.local/bin:$PATH"
+
+# Aliases - workspace
+alias ws='ai-status'
+alias wsk='ai-kill'
+alias tls='tmux ls'
+alias ta='tmux attach -t'
+
+# Aliases - ferramentas
+alias cc='claude'
+alias gm='gemini'
+alias qc='qwen'
+alias ccp='claude -p'
+alias lp='lightpanda'
+alias lps='lightpanda serve --host 0.0.0.0 --port 9222'  # CDP server
+alias cfd='cloudflared tunnel --url'                      # quick tunnel: cfd http://localhost:3000
+
+# Git defaults
+alias gs='git status'
+alias gl='git log --oneline -20'
+alias gp='git pull'
+
+# Prompt informativo
+PS1='\[\e[38;5;43m\]⚡\[\e[0m\] \[\e[38;5;250m\]\w\[\e[0m\] \$ '

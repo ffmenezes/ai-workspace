@@ -1,0 +1,79 @@
+version: "3.7"
+
+# ══════════════════════════════════════════════════════════════
+# AI Workspace — Claude Code + Gemini + Qwen + Cursor + Lightpanda
+# Deploy via Portainer > Stacks > Add Stack
+#
+# PRÉ-REQUISITOS (rodar no terminal da VPS antes do deploy):
+#   docker volume create aiworkspace_projects
+#   docker volume create aiworkspace_config
+#   docker volume create aiworkspace_claude
+#   docker volume create aiworkspace_gemini
+#   docker volume create aiworkspace_ssh
+#
+# IMAGEM:
+#   Por padrão usa a imagem pública do GitHub Container Registry.
+#   Pra usar imagem local, troque a linha "image:" abaixo.
+#
+# ATUALIZAR:
+#   docker service update --image ghcr.io/SEU_USUARIO/ai-workspace:latest aiworkspace_workspace
+# ══════════════════════════════════════════════════════════════
+
+services:
+  workspace:
+    # ⚠️ TROQUE "SEU_USUARIO" pelo seu usuário do GitHub (lowercase)
+    image: ghcr.io/SEU_USUARIO/ai-workspace:latest
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+
+    stdin_open: true
+    tty: true
+
+    networks:
+      - network_swarm_public
+
+    environment:
+      - TERM=xterm-256color
+      - LANG=C.UTF-8
+
+    volumes:
+      - aiworkspace_projects:/home/dev/projects
+      - aiworkspace_config:/home/dev/.config
+      - aiworkspace_claude:/home/dev/.claude
+      - aiworkspace_gemini:/home/dev/.gemini
+      - aiworkspace_ssh:/home/dev/.ssh
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+volumes:
+  aiworkspace_projects:
+    external: true
+    name: aiworkspace_projects
+  aiworkspace_config:
+    external: true
+    name: aiworkspace_config
+  aiworkspace_claude:
+    external: true
+    name: aiworkspace_claude
+  aiworkspace_gemini:
+    external: true
+    name: aiworkspace_gemini
+  aiworkspace_ssh:
+    external: true
+    name: aiworkspace_ssh
+
+networks:
+  network_swarm_public:
+    external: true
+    name: network_swarm_public

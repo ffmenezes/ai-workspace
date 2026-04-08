@@ -1,0 +1,23 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Build artifacts
+*.zip
+*.tar.gz
+
+# Logs
+*.log
+.ralph-logs/
+
+# Local secrets
+.env
+.env.local
+*.key
+*.pem

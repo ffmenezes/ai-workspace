@@ -1,0 +1,110 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# aidev — Cria/reconecta workspace tmux por projeto
+#
+# Uso:
+#   aidev <projeto>                     → só Claude Code + shell
+#   aidev <projeto> --all               → Claude + Gemini + Qwen + Cursor + Browser + shell
+#   aidev <projeto> --gemini            → Claude + Gemini + shell
+#   aidev <projeto> --qwen              → Claude + Qwen + shell
+#   aidev <projeto> --cursor            → Claude + Cursor + shell
+#   aidev <projeto> --rc                → Claude com Remote Control
+#   aidev <projeto> --danger            → Claude skip-permissions + yolo nos demais
+#   aidev <projeto> --browser           → inclui Lightpanda CDP
+#
+# Flags são combináveis:
+#   aidev <projeto> --gemini --qwen --cursor --browser --rc --danger
+# ══════════════════════════════════════════════════════════════
+set -e
+
+PROJECT="${1:?Uso: aidev <projeto> [--all] [--gemini] [--qwen] [--cursor] [--browser] [--rc] [--danger]}"
+shift
+
+# ── Parsear flags ──
+RC=false
+DANGER=false
+GEMINI=false
+QWEN=false
+CURSOR=false
+BROWSER=false
+
+for flag in "$@"; do
+    case "$flag" in
+        --rc)      RC=true ;;
+        --danger)  DANGER=true ;;
+        --gemini)  GEMINI=true ;;
+        --qwen)    QWEN=true ;;
+        --cursor)  CURSOR=true ;;
+        --browser) BROWSER=true ;;
+        --all)     GEMINI=true; QWEN=true; CURSOR=true; BROWSER=true ;;
+    esac
+done
+
+DIR="$HOME/projects/$PROJECT"
+mkdir -p "$DIR"
+
+# ── Reconectar se já existe ──
+if tmux has-session -t "$PROJECT" 2>/dev/null; then
+    echo "♻️  Reconectando na sessão '$PROJECT'..."
+    tmux attach -t "$PROJECT"
+    exit 0
+fi
+
+echo "🚀 Criando workspace '$PROJECT'..."
+
+# ── Montar comandos ──
+CLAUDE_CMD="claude"
+$RC && CLAUDE_CMD="$CLAUDE_CMD --remote-control"
+$DANGER && CLAUDE_CMD="$CLAUDE_CMD --dangerously-skip-permissions"
+
+GEMINI_CMD="gemini --resume"
+$DANGER && GEMINI_CMD="gemini --resume --yolo"
+
+QWEN_CMD="qwen"
+$DANGER && QWEN_CMD="qwen --yolo"
+
+CURSOR_CMD="cursor"
+$DANGER && CURSOR_CMD="cursor -f"
+
+# ── Window 1: Claude Code (sempre) ──
+tmux new-session -d -s "$PROJECT" -n "claude" -c "$DIR"
+tmux send-keys -t "$PROJECT" "$CLAUDE_CMD" C-m
+
+# ── Windows opcionais ──
+if $GEMINI; then
+    tmux new-window -t "$PROJECT" -n "gemini" -c "$DIR"
+    tmux send-keys -t "$PROJECT" "$GEMINI_CMD" C-m
+fi
+
+if $QWEN; then
+    tmux new-window -t "$PROJECT" -n "qwen" -c "$DIR"
+    tmux send-keys -t "$PROJECT" "$QWEN_CMD" C-m
+fi
+
+if $CURSOR; then
+    tmux new-window -t "$PROJECT" -n "cursor" -c "$DIR"
+    tmux send-keys -t "$PROJECT" "$CURSOR_CMD" C-m
+fi
+
+if $BROWSER; then
+    tmux new-window -t "$PROJECT" -n "browser" -c "$DIR"
+    tmux send-keys -t "$PROJECT" 'lightpanda serve --host 0.0.0.0 --port 9222 --log_level info' C-m
+fi
+
+# ── Shell livre (sempre) ──
+tmux new-window -t "$PROJECT" -n "shell" -c "$DIR"
+
+# ── Focar no Claude ──
+tmux select-window -t "$PROJECT":1
+
+# ── Info ──
+AGENTS="claude"
+$GEMINI && AGENTS="$AGENTS + gemini"
+$QWEN && AGENTS="$AGENTS + qwen"
+$CURSOR && AGENTS="$AGENTS + cursor"
+$BROWSER && AGENTS="$AGENTS + browser"
+echo "   Agents: $AGENTS"
+$DANGER && echo "⚠️  Modo DANGER ativo"
+
+# ── Attach ──
+tmux attach -t "$PROJECT"

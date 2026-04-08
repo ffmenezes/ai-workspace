@@ -1,0 +1,176 @@
+FROM node:22-bookworm-slim
+
+# ══════════════════════════════════════════════════════════════
+# AI Workspace Container
+#
+# Base: node:22-bookworm-slim (Debian 12 + Node.js 22 LTS)
+# Organizado por frequência de mudança (cache-friendly):
+#   1. Sistema + apt          (quase nunca muda)
+#   2. Build tools + runtimes (raramente muda)
+#   3. Ferramentas estáticas  (raramente muda)
+#   4. User + configs         (muda às vezes)
+#   5. AI CLIs                (atualizam frequentemente)
+#   6. Fix permissões         (depende das CLIs)
+# ══════════════════════════════════════════════════════════════
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ══════════════════════════════════════════════════════════════
+# LAYER 1: Sistema (quase nunca muda)
+# ══════════════════════════════════════════════════════════════
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Essenciais
+    curl wget git jq unzip ca-certificates gnupg \
+    # Terminal
+    tmux zsh \
+    # Busca rápida (usado pelos AI agents)
+    ripgrep fd-find \
+    # Python
+    python3 python3-pip python3-venv \
+    # Build tools (gcc, make — compilar do source)
+    build-essential pkg-config libssl-dev \
+    # SSH client
+    openssh-client \
+    # Utilitários
+    less nano htop tree \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/fdfind /usr/local/bin/fd
+
+# ══════════════════════════════════════════════════════════════
+# LAYER 2: Runtimes e build tools (raramente muda)
+# ══════════════════════════════════════════════════════════════
+
+# ── Rust toolchain ──
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# ── Go ──
+RUN curl -L -o /tmp/go.tar.gz https://go.dev/dl/go1.24.2.linux-amd64.tar.gz \
+    && tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+# ── uv (gerenciador Python moderno) ──
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# ══════════════════════════════════════════════════════════════
+# LAYER 3: Ferramentas estáticas (raramente muda)
+# ══════════════════════════════════════════════════════════════
+
+# ── Modern Unix tools ──
+RUN curl -L -o /tmp/bat.deb https://github.com/sharkdp/bat/releases/download/v0.24.0/bat_0.24.0_amd64.deb \
+    && dpkg -i /tmp/bat.deb && rm /tmp/bat.deb \
+    && curl -L -o /tmp/eza.tar.gz https://github.com/eza-community/eza/releases/latest/download/eza_x86_64-unknown-linux-gnu.tar.gz \
+    && tar xzf /tmp/eza.tar.gz -C /usr/local/bin && rm /tmp/eza.tar.gz \
+    && chmod a+x /usr/local/bin/eza
+
+# ── Starship prompt ──
+RUN curl -sS https://starship.rs/install.sh | sh -s -- -y
+
+# ── Lightpanda (headless browser) ──
+RUN curl -L -o /usr/local/bin/lightpanda \
+    https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-x86_64-linux \
+    && chmod a+x /usr/local/bin/lightpanda
+
+# ── cloudflared (quick tunnel) ──
+RUN curl -L -o /usr/local/bin/cloudflared \
+    https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+    && chmod a+x /usr/local/bin/cloudflared
+
+# ── Playwright + Chromium (browser automation, E2E, scraping avançado) ──
+# Instala Playwright global + Chromium + todas as deps do sistema (libnss, libatk, etc.)
+# Pesa ~500MB mas permite bypass de anti-bot, testes E2E, scraping de sites protegidos
+RUN npm install -g playwright \
+    && npx playwright install --with-deps chromium \
+    # Copiar browsers pra path compartilhado (user dev precisa acessar)
+    && mv /root/.cache/ms-playwright /opt/ms-playwright \
+    && chmod -R a+rX /opt/ms-playwright
+ENV PLAYWRIGHT_BROWSERS_PATH="/opt/ms-playwright"
+
+# ══════════════════════════════════════════════════════════════
+# LAYER 4: User, configs e scripts (muda às vezes)
+# ══════════════════════════════════════════════════════════════
+
+# ── Usuário não-root com zsh ──
+RUN useradd -m -s /bin/zsh dev \
+    && mkdir -p /home/dev/projects \
+    && mkdir -p /home/dev/.config \
+    && mkdir -p /home/dev/.claude \
+    && mkdir -p /home/dev/.gemini \
+    && mkdir -p /home/dev/.ssh \
+    && mkdir -p /home/dev/bin \
+    && chown -R dev:dev /home/dev
+
+# ══════════════════════════════════════════════════════════════
+# LAYER 5: AI CLIs (atualizam frequentemente — no fim pro cache)
+# ══════════════════════════════════════════════════════════════
+
+# ── Claude Code ──
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# ── Gemini CLI ──
+RUN npm install -g @google/gemini-cli
+
+# ── Qwen Code ──
+RUN npm install -g @qwen-code/qwen-code
+
+# ── Cursor CLI ──
+RUN curl -fsSL https://cursor.com/install | bash
+
+# ══════════════════════════════════════════════════════════════
+# LAYER 6: Fix permissões (depende das CLIs acima)
+# ══════════════════════════════════════════════════════════════
+
+RUN mkdir -p /opt/claude \
+    && cp -rL /root/.local/share/claude/* /opt/claude/ 2>/dev/null || true \
+    && rm -f /usr/local/bin/claude \
+    && ln -sf /opt/claude/versions/$(ls /opt/claude/versions/ | head -1) /usr/local/bin/claude \
+    && chmod -R a+rX /opt/claude \
+    # Cursor CLI: instala como "agent" em /root/.local/share/cursor-agent/
+    && mkdir -p /opt/cursor-agent \
+    && cp -rL /root/.local/share/cursor-agent/* /opt/cursor-agent/ 2>/dev/null || true \
+    && rm -f /usr/local/bin/cursor \
+    && ln -sf /opt/cursor-agent/versions/$(ls /opt/cursor-agent/versions/ | head -1)/cursor-agent /usr/local/bin/cursor \
+    && chmod -R a+rX /opt/cursor-agent \
+    # uv + rust (cargo, rustc, rustup)
+    && cp /root/.cargo/bin/* /usr/local/bin/ 2>/dev/null || true \
+    && chmod -R a+rX /root/.rustup 2>/dev/null || true
+
+# ══════════════════════════════════════════════════════════════
+# LAYER 7: Configs do user dev (COPY invalida cache se mudou)
+# ══════════════════════════════════════════════════════════════
+
+USER dev
+WORKDIR /home/dev
+
+# ── Starship preset ──
+RUN mkdir -p /home/dev/.config \
+    && starship preset gruvbox-rainbow -o /home/dev/.config/starship.toml \
+    && echo -e '\n[container]\ndisabled = true' >> /home/dev/.config/starship.toml \
+    && echo -e '\n[gcloud]\ndisabled = true' >> /home/dev/.config/starship.toml
+
+# ── tmux ──
+COPY --chown=dev:dev tmux.conf /home/dev/.tmux.conf
+
+# ── Scripts ──
+COPY --chown=dev:dev scripts/ /home/dev/bin/
+RUN chmod +x /home/dev/bin/*
+
+# ── Zshrc ──
+COPY --chown=dev:dev zshrc /home/dev/.zshrc
+
+# ── Bashrc (fallback) ──
+COPY --chown=dev:dev bashrc.append /tmp/bashrc.append
+RUN cat /tmp/bashrc.append >> /home/dev/.bashrc && rm /tmp/bashrc.append
+
+# ══════════════════════════════════════════════════════════════
+# ENV + CMD
+# ══════════════════════════════════════════════════════════════
+
+ENV PATH="/home/dev/bin:/home/dev/.local/bin:/usr/local/bin:/usr/local/go/bin:${PATH}"
+ENV LIGHTPANDA_DISABLE_TELEMETRY=true
+ENV RUSTUP_HOME="/root/.rustup"
+ENV CARGO_HOME="/home/dev/.cargo"
+ENV STARSHIP_CONFIG="/home/dev/.config/starship.toml"
+
+CMD ["bash", "-c", "tmux new-session -d -s main && tail -f /dev/null"]

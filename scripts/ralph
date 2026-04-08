@@ -1,0 +1,205 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# ralph — Loop autônomo de AI agent
+#
+# Uso interativo:
+#   ralph                          → wizard guiado
+#
+# Uso direto:
+#   ralph -a claude -p "faça X"    → roda direto
+#   ralph -a gemini -f prompt.md   → prompt de arquivo
+#
+# Flags:
+#   -a, --agent     claude|gemini|qwen (default: claude)
+#   -p, --prompt    prompt inline
+#   -f, --file      prompt de arquivo
+#   -m, --max       máximo de loops (default: 50)
+#   -d, --danger    skip-permissions/yolo
+#   --done          palavra de parada (default: RALPH_DONE)
+# ══════════════════════════════════════════════════════════════
+set -e
+
+# ── Defaults ──
+AGENT=""
+PROMPT=""
+PROMPT_FILE=""
+MAX_LOOPS=50
+DANGER=false
+DONE_WORD="RALPH_DONE"
+PROJECT_NAME=$(basename "$PWD")
+LOG_DIR="$PWD/.ralph-logs"
+
+# ── Parse args ──
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--agent)   AGENT="$2"; shift 2 ;;
+        -p|--prompt)  PROMPT="$2"; shift 2 ;;
+        -f|--file)    PROMPT_FILE="$2"; shift 2 ;;
+        -m|--max)     MAX_LOOPS="$2"; shift 2 ;;
+        -d|--danger)  DANGER=true; shift ;;
+        --done)       DONE_WORD="$2"; shift 2 ;;
+        *)            shift ;;
+    esac
+done
+
+# ══════════════════════════════════════════════════════════════
+# MODO INTERATIVO (se faltou agent ou prompt)
+# ══════════════════════════════════════════════════════════════
+
+if [ -z "$AGENT" ]; then
+    echo ""
+    echo "🔁 Ralph Loop — $PROJECT_NAME"
+    echo "══════════════════════════════════════"
+    echo ""
+    echo "Qual agent?"
+    echo "  1) Claude Code"
+    echo "  2) Gemini CLI"
+    echo "  3) Qwen Code"
+    echo ""
+    read -rp "Escolha [1]: " AGENT_CHOICE
+    case "${AGENT_CHOICE:-1}" in
+        1) AGENT="claude" ;;
+        2) AGENT="gemini" ;;
+        3) AGENT="qwen" ;;
+        *) AGENT="claude" ;;
+    esac
+fi
+
+if [ -z "$PROMPT" ] && [ -z "$PROMPT_FILE" ]; then
+    echo ""
+    echo "Como fornecer o prompt?"
+    echo "  1) Digitar agora"
+    echo "  2) Ler de arquivo"
+    echo ""
+    read -rp "Escolha [1]: " PROMPT_CHOICE
+    
+    if [ "${PROMPT_CHOICE:-1}" = "2" ]; then
+        read -rp "Caminho do arquivo: " PROMPT_FILE
+        if [ ! -f "$PROMPT_FILE" ]; then
+            echo "❌ Arquivo '$PROMPT_FILE' não encontrado."
+            exit 1
+        fi
+    else
+        echo ""
+        echo "Digite o prompt (termine com linha vazia):"
+        echo "─────────────────────────────────────"
+        PROMPT=""
+        while IFS= read -r line; do
+            [ -z "$line" ] && break
+            PROMPT="${PROMPT}${PROMPT:+$'\n'}${line}"
+        done
+        if [ -z "$PROMPT" ]; then
+            echo "❌ Prompt vazio."
+            exit 1
+        fi
+    fi
+fi
+
+if ! $DANGER; then
+    echo ""
+    read -rp "Ativar modo danger (skip-permissions/yolo)? [N/s]: " DANGER_CHOICE
+    case "$DANGER_CHOICE" in
+        s|S|sim|y|Y|yes) DANGER=true ;;
+    esac
+fi
+
+echo ""
+read -rp "Máximo de loops [$MAX_LOOPS]: " MAX_INPUT
+MAX_LOOPS="${MAX_INPUT:-$MAX_LOOPS}"
+
+# ══════════════════════════════════════════════════════════════
+# MONTAR COMANDO
+# ══════════════════════════════════════════════════════════════
+
+# Resolver prompt
+if [ -n "$PROMPT_FILE" ]; then
+    PROMPT=$(cat "$PROMPT_FILE")
+fi
+
+# Adicionar instrução de parada ao prompt
+FULL_PROMPT="${PROMPT}
+
+IMPORTANTE: Quando todas as tarefas estiverem completas, responda exatamente: ${DONE_WORD}"
+
+# Montar comando base do agent
+case "$AGENT" in
+    claude)
+        AGENT_CMD="claude -p"
+        $DANGER && AGENT_CMD="claude --dangerously-skip-permissions -p"
+        ;;
+    gemini)
+        AGENT_CMD="gemini -p"
+        $DANGER && AGENT_CMD="gemini --yolo -p"
+        ;;
+    qwen)
+        AGENT_CMD="qwen -p"
+        $DANGER && AGENT_CMD="qwen --yolo -p"
+        ;;
+    *)
+        echo "❌ Agent '$AGENT' não reconhecido. Use: claude, gemini, qwen"
+        exit 1
+        ;;
+esac
+
+# ══════════════════════════════════════════════════════════════
+# CONFIRMAÇÃO
+# ══════════════════════════════════════════════════════════════
+
+echo ""
+echo "══════════════════════════════════════"
+echo "  Ralph Loop — Configuração"
+echo "══════════════════════════════════════"
+echo "  Agent:    $AGENT"
+echo "  Danger:   $DANGER"
+echo "  Loops:    $MAX_LOOPS"
+echo "  Parada:   $DONE_WORD"
+echo "  Logs:     $LOG_DIR/"
+echo "  Prompt:"
+echo "  ─────────"
+echo "$PROMPT" | head -5 | sed 's/^/  /'
+[ $(echo "$PROMPT" | wc -l) -gt 5 ] && echo "  (...)"
+echo "══════════════════════════════════════"
+echo ""
+read -rp "Iniciar? [S/n]: " CONFIRM
+case "$CONFIRM" in
+    n|N|nao|não|no) echo "Cancelado."; exit 0 ;;
+esac
+
+# ══════════════════════════════════════════════════════════════
+# EXECUTAR LOOP
+# ══════════════════════════════════════════════════════════════
+
+mkdir -p "$LOG_DIR"
+START_TIME=$(date +%s)
+
+echo ""
+echo "🔁 Ralph Loop iniciado — $(date '+%H:%M:%S')"
+echo ""
+
+for i in $(seq 1 "$MAX_LOOPS"); do
+    LOOP_LOG="$LOG_DIR/loop-$(printf '%03d' $i).log"
+    
+    echo "── Loop $i/$MAX_LOOPS ── $(date '+%H:%M:%S')"
+    
+    $AGENT_CMD "$FULL_PROMPT" 2>&1 | tee "$LOOP_LOG"
+    
+    # Verificar palavra de parada
+    if grep -qi "$DONE_WORD" "$LOOP_LOG"; then
+        END_TIME=$(date +%s)
+        DURATION=$(( (END_TIME - START_TIME) / 60 ))
+        echo ""
+        echo "✅ Ralph Loop completo!"
+        echo "   Loops: $i"
+        echo "   Tempo: ${DURATION}min"
+        echo "   Logs:  $LOG_DIR/"
+        exit 0
+    fi
+    
+    sleep 3
+done
+
+END_TIME=$(date +%s)
+DURATION=$(( (END_TIME - START_TIME) / 60 ))
+echo ""
+echo "⚠️  Atingiu limite de $MAX_LOOPS loops (${DURATION}min)"
+echo "   Logs: $LOG_DIR/"

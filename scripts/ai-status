@@ -1,0 +1,54 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# ai-status — Status de todas as sessões e recursos
+# ══════════════════════════════════════════════════════════════
+
+echo "══════════════════════════════════════"
+echo "  AI Workspace Status"
+echo "══════════════════════════════════════"
+echo ""
+
+# Sessões tmux
+echo "📺 Sessões tmux:"
+if tmux ls 2>/dev/null; then
+    echo ""
+else
+    echo "   Nenhuma sessão ativa"
+    echo ""
+fi
+
+# Processos ativos
+echo "🤖 Processos ativos:"
+CLAUDE_COUNT=$(pgrep -c -f "claude" 2>/dev/null || echo "0")
+GEMINI_COUNT=$(pgrep -c -f "gemini" 2>/dev/null || echo "0")
+QWEN_COUNT=$(pgrep -c -f "qwen" 2>/dev/null || echo "0")
+echo "   Claude Code: $CLAUDE_COUNT processo(s)"
+echo "   Gemini CLI:  $GEMINI_COUNT processo(s)"
+echo "   Qwen Code:   $QWEN_COUNT processo(s)"
+echo ""
+
+# Projetos
+echo "📁 Projetos:"
+if [ -d "$HOME/projects" ]; then
+    ls -1 "$HOME/projects" 2>/dev/null | while read -r dir; do
+        echo "   $dir"
+    done
+else
+    echo "   Nenhum projeto"
+fi
+echo ""
+
+# Recursos
+echo "🧠 Memória:"
+if [ -f /proc/meminfo ]; then
+    TOTAL=$(awk '/MemTotal/ {printf "%.0f", $2/1024}' /proc/meminfo)
+    AVAIL=$(awk '/MemAvailable/ {printf "%.0f", $2/1024}' /proc/meminfo)
+    USED=$((TOTAL - AVAIL))
+    echo "   Usado: ${USED}MB / ${TOTAL}MB"
+else
+    echo "   N/A"
+fi
+
+echo "💾 Disco:"
+df -h /home/dev/projects 2>/dev/null | tail -1 | awk '{print "   Usado: "$3" / "$2" ("$5")"}' || echo "   N/A"
+echo ""
