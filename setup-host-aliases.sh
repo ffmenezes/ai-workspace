@@ -66,6 +66,12 @@ ai-dev-danger() {
     docker exec -it "$CID" zsh -lc "ai-dev $1 --danger"
 }
 
+# Mostrar versão da imagem rodando no container
+ai-version() {
+    local CID; CID=$(_ai_require_container) || return 1
+    docker exec "$CID" bash -c 'echo "version: $AI_WORKSPACE_VERSION"; echo "commit:  $AI_WORKSPACE_COMMIT"; echo "built:   $AI_WORKSPACE_BUILD_DATE"; echo ""; echo "Boot log (últimas 5 entradas):"; tail -5 /home/dev/.ai-workspace.log 2>/dev/null || echo "(sem log)"'
+}
+
 # Listar sessões tmux ativas no container
 ai-sessions() {
     local CID; CID=$(_ai_require_container) || return 1
@@ -139,6 +145,7 @@ ai-help() {
   ai-attach                  H      Anexa ao tmux principal (sessão "main")
   ai-update [imagem]         H      Pull + force update do serviço Swarm
                                     (AI_WORKSPACE_SERVICE override do nome)
+  ai-version                 H      Mostra versão da imagem em execução + boot log
   ai-fix-perms               H      Corrige owner em ~/projects (dev:dev)
   ai-help                    H      Esta ajuda
 
@@ -197,6 +204,7 @@ echo "   ai-kill <proj>     → Matar sessão"
 echo "   ai-kill-all        → Matar todas as sessões de projeto"
 echo "   ai-fix-perms       → Corrigir permissões em ~/projects"
 echo "   ai-update          → Pull + restart do serviço"
+echo "   ai-version         → Versão da imagem em execução"
 echo "   ai-help            → Ajuda completa"
 echo ""
 echo "⚡ Rode agora:  source ~/.bashrc  &&  ai-help"

@@ -182,6 +182,23 @@ COPY --chown=dev:dev bashrc.append /tmp/bashrc.append
 RUN cat /tmp/bashrc.append >> /home/dev/.bashrc && rm /tmp/bashrc.append
 
 # ══════════════════════════════════════════════════════════════
+# Version metadata (injetado pelo CI)
+# ══════════════════════════════════════════════════════════════
+
+ARG AI_WORKSPACE_VERSION=dev
+ARG AI_WORKSPACE_COMMIT=unknown
+ARG AI_WORKSPACE_BUILD_DATE=unknown
+
+ENV AI_WORKSPACE_VERSION=${AI_WORKSPACE_VERSION}
+ENV AI_WORKSPACE_COMMIT=${AI_WORKSPACE_COMMIT}
+ENV AI_WORKSPACE_BUILD_DATE=${AI_WORKSPACE_BUILD_DATE}
+
+# OCI labels (visíveis em `docker inspect` e na UI do GHCR)
+LABEL org.opencontainers.image.version="${AI_WORKSPACE_VERSION}"
+LABEL org.opencontainers.image.revision="${AI_WORKSPACE_COMMIT}"
+LABEL org.opencontainers.image.created="${AI_WORKSPACE_BUILD_DATE}"
+
+# ══════════════════════════════════════════════════════════════
 # ENV + CMD
 # ══════════════════════════════════════════════════════════════
 
@@ -191,4 +208,7 @@ ENV RUSTUP_HOME="/root/.rustup"
 ENV CARGO_HOME="/home/dev/.cargo"
 ENV STARSHIP_CONFIG="/home/dev/.config/starship.toml"
 
-CMD ["bash", "-c", "tmux new-session -d -s main && tail -f /dev/null"]
+# Boot log: registra versão + timestamp no startup do container.
+# Surface via `docker logs <container>` (stdout) e via arquivo persistente
+# em /home/dev/.ai-workspace.log (writable pelo user dev).
+CMD ["bash", "-c", "echo \"[$(date -Iseconds)] AI Workspace started — version=${AI_WORKSPACE_VERSION} commit=${AI_WORKSPACE_COMMIT} build_date=${AI_WORKSPACE_BUILD_DATE}\" | tee -a /home/dev/.ai-workspace.log; tmux new-session -d -s main && tail -f /home/dev/.ai-workspace.log"]

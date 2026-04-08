@@ -26,3 +26,8 @@ alias gp='git pull'
 
 # Prompt informativo
 PS1='\[\e[38;5;43m\]⚡\[\e[0m\] \[\e[38;5;250m\]\w\[\e[0m\] \$ '
+
+# Banner de versão (só em shell interativo)
+if [[ $- == *i* ]] && [ -n "$AI_WORKSPACE_VERSION" ]; then
+    echo "🤖 AI Workspace v${AI_WORKSPACE_VERSION} (commit ${AI_WORKSPACE_COMMIT:0:7}, built ${AI_WORKSPACE_BUILD_DATE})"
+fi

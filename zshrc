@@ -21,6 +21,11 @@ export PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:/usr/local/go/bin:$PATH"
 # ── Starship prompt ──
 eval "$(starship init zsh)"
 
+# ── Banner de versão (só em shell interativo) ──
+if [[ -o interactive ]] && [ -n "$AI_WORKSPACE_VERSION" ]; then
+    echo "🤖 AI Workspace v${AI_WORKSPACE_VERSION} (commit ${AI_WORKSPACE_COMMIT:0:7}, built ${AI_WORKSPACE_BUILD_DATE})"
+fi
+
 # ── Modern Unix tools (sem sobrescrever comandos nativos) ──
 # Mantemos ls/cat/find originais pra compatibilidade com tools de AI agents
 # Use os modernos diretamente quando quiser:
