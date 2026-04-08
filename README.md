@@ -1,6 +1,6 @@
 # AI Workspace — Deploy Guide
 
-Setup containerizado de Claude Code + Gemini CLI + Qwen Code + Lightpanda
+Setup containerizado de Claude Code + Gemini CLI + Qwen Code + Cursor CLI + OpenCode CLI
 no Docker Swarm, com persistência em volumes e acesso via Termius.
 
 ---
@@ -11,13 +11,13 @@ no Docker Swarm, com persistência em volumes e acesso via Termius.
 # 1. Na VPS: descompactar, buildar, deploy
 cd ~/ai-workspace
 docker build -t ai-workspace:latest .
-# Deploy via Portainer (Stacks → Add Stack → colar stack-aiworkspace.yaml)
+# Deploy via Portainer (Stacks → Add Stack → colar aiworkspace.yaml)
 
 # 2. Instalar atalhos no host
 bash setup-host-aliases.sh && source ~/.bashrc
 
 # 3. Entrar e autenticar (uma vez só)
-aiw
+ai-enter
 claude /login                   # segue a URL no browser
 export GEMINI_API_KEY="key"     # https://aistudio.google.com/apikey
 echo 'export GEMINI_API_KEY="key"' >> ~/.bashrc
@@ -26,14 +26,14 @@ ssh-keygen -t ed25519 -C "ai-workspace"   # adicionar pub key no GitHub
 exit
 
 # 4. Usar
-aidev meu-projeto                          # só Claude + shell (leve)
-aidev meu-projeto --gemini                 # Claude + Gemini
-aidev meu-projeto --qwen                   # Claude + Qwen
-aidev meu-projeto --all                    # Claude + Gemini + Qwen + Browser
-aidev meu-projeto --rc                     # + Remote Control (celular)
-aidev meu-projeto --danger                 # skip-permissions + yolo
-aidev meu-projeto --gemini --qwen --rc     # combina o que quiser
-aidanger meu-projeto                       # atalho pra --all --danger
+ai-dev meu-projeto                         # padrão: TODOS os agents (= --all)
+ai-dev meu-projeto --claude                # só Claude
+ai-dev meu-projeto --claude --gemini       # Claude + Gemini
+ai-dev meu-projeto --qwen --cursor         # Qwen + Cursor (sem Claude)
+ai-dev meu-projeto --rc                    # padrão + Remote Control no Claude
+ai-dev meu-projeto --danger                # padrão + skip-permissions/yolo
+ai-dev-danger meu-projeto                  # atalho pra --danger (todos)
+ai-help                                    # lista todos os comandos
 
 # Dentro do tmux:
 # Ctrl+B 1/2/3...  → alternar windows
@@ -85,7 +85,7 @@ Você reconecta e tá tudo lá.
 
 ### Zero setup por projeto
 
-Um comando (`aidev nome`) cria o workspace completo. Múltiplos projetos rodam
+Um comando (`ai-dev nome`) cria o workspace completo. Múltiplos projetos rodam
 em paralelo como sessões tmux independentes.
 
 ### Reprodutível e portável
@@ -102,7 +102,7 @@ pessoa? Cria outro container com volumes separados.
 VPS (Debian 12)
 ├── Docker Swarm
 │   ├── Traefik, Portainer, n8n...     ← seus serviços
-│   └── ai-workspace (container)        ← Claude + Gemini + Qwen + Lightpanda
+│   └── ai-workspace (container)        ← Claude + Gemini + Qwen + Cursor + OpenCode
 │       ├── /home/dev/projects  → vol   ← repos, código
 │       ├── /home/dev/.config   → vol   ← auth tokens, settings
 │       ├── /home/dev/.claude   → vol   ← skills, CLAUDE.md
@@ -110,7 +110,7 @@ VPS (Debian 12)
 │       └── /home/dev/.ssh      → vol   ← chaves SSH
 │
 └── Host
-    └── aiw / aidev / aidanger          ← atalhos pra entrar no container
+    └── ai-enter / ai-dev / ai-dev-danger     ← atalhos pra entrar no container
 ```
 
 ### Por que `node:22-bookworm-slim`?
@@ -118,7 +118,7 @@ VPS (Debian 12)
 | Critério | Decisão |
 |----------|---------|
 | **Node.js** | Gemini CLI e Qwen Code requerem Node.js 20+. A base já inclui Node 22 LTS + npm. |
-| **glibc vs musl** | Claude Code, Lightpanda e uv distribuem binários nativos linkados contra glibc. Alpine (musl) causa crash. |
+| **glibc vs musl** | Claude Code e uv distribuem binários nativos linkados contra glibc. Alpine (musl) causa crash. |
 | **Debian 12 (Bookworm)** | Mesma distro do host da VPS. Sem surpresas de compatibilidade. |
 | **Slim** | Sem docs, man pages e compiladores desnecessários (~200MB vs ~1.1GB na variante full). |
 
@@ -132,6 +132,7 @@ VPS (Debian 12)
 | Gemini CLI | `npm install -g @google/gemini-cli` | AI coding agent (Google) |
 | Qwen Code | `npm install -g @qwen-code/qwen-code` | AI coding agent (Alibaba, free tier) |
 | Cursor CLI | Native installer (`curl`) | AI coding agent (Anysphere) |
+| OpenCode CLI | `npm install -g opencode-ai` | AI coding agent (sst, open source, multi-provider) |
 | Lightpanda | Binário único (`curl`) | Headless browser leve (MCPs, scraping simples) |
 | Playwright + Chromium | `npm install -g` + `--with-deps` | Browser completo (E2E, scraping avançado, anti-bot) |
 | cloudflared | Binário único (`curl`) | Quick tunnel pra expor localhost |
@@ -165,6 +166,9 @@ docker volume create aiworkspace_projects
 docker volume create aiworkspace_config
 docker volume create aiworkspace_claude
 docker volume create aiworkspace_gemini
+docker volume create aiworkspace_qwen
+docker volume create aiworkspace_cursor
+docker volume create aiworkspace_opencode
 docker volume create aiworkspace_ssh
 ```
 
@@ -186,7 +190,7 @@ docker pull ghcr.io/ffmenezes/ai-workspace:latest
 > ⚠️ Substitua `ffmenezes` pelo seu usuário do GitHub se for fork.
 > Se a imagem é privada, faça login antes:
 > ```bash
-> echo "$GITHUB_TOKEN" | docker login ghcr.io -u SEU_USUARIO --password-stdin
+> echo "$GITHUB_TOKEN" | docker login ghcr.io -u ffmenezes --password-stdin
 > ```
 
 ### Opção B — Build local
@@ -206,12 +210,12 @@ mudanças antes de commitar.
 1. Abrir Portainer → **Stacks** → **Add Stack**
 2. Nome: `aiworkspace`
 3. **Build method**: Web editor
-4. Colar o conteúdo de `stack-aiworkspace.yaml`
+4. Colar o conteúdo de `aiworkspace.yaml`
 5. Clicar **Deploy the stack**
 
 **Alternativa via CLI:**
 ```bash
-docker stack deploy -c stack-aiworkspace.yaml aiworkspace
+docker stack deploy -c aiworkspace.yaml aiworkspace
 ```
 
 ---
@@ -224,48 +228,63 @@ bash setup-host-aliases.sh
 source ~/.bashrc
 ```
 
-Adiciona os atalhos `aiw`, `ait`, `aidev`, `aidanger`, `aiws` ao host.
+Adiciona os atalhos `ai-enter`, `ai-attach`, `ai-dev`, `ai-dev-danger`, `ai-sessions`, `ai-kill`, `ai-kill-all`, `ai-fix-perms`, `ai-update` e `ai-help` ao host. Rode `ai-help` pra ver a referência completa.
 
 ---
 
 ## Passo 6: Autenticar as CLIs
 
 ```bash
-aiw
+ai-enter
 
 # ── Claude Code (subscription Pro/Max) ──
 claude /login
 # Vai mostrar uma URL — copie e abra no browser
-# O token fica salvo em ~/.claude/ (volume persistente)
+# O token fica salvo em ~/.claude/.credentials.json (volume aiworkspace_claude)
 claude -p "ping"
 
 # ── Gemini CLI ──
 # Gere API key em: https://aistudio.google.com/apikey
-export GEMINI_API_KEY="sua-api-key"
-echo 'export GEMINI_API_KEY="sua-api-key"' >> ~/.bashrc
+# IMPORTANTE: configure no aiworkspace.yaml (environment), NÃO no ~/.bashrc.
+# O ~/.bashrc do container é recriado a cada rebuild — env var no stack sobrevive.
 gemini --version
 
 # ── Qwen Code ──
 # Opção A: Qwen OAuth (gratuito, 1000 req/dia)
 qwen
 # Na primeira execução, escolha "Qwen OAuth (Free)" e siga o browser
+# Token persiste em ~/.qwen (volume aiworkspace_qwen)
 
-# Opção B: API key (DashScope, OpenRouter, etc.)
-# export OPENAI_API_KEY="sua-key"
-# export OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
-# export OPENAI_MODEL="qwen3-coder-plus"
+# Opção B: API key (DashScope, OpenRouter, etc.) — configure no stack file
+# OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL
+
+# ── Cursor CLI ──
+# Opção A: browser OAuth (recomendado)
+agent login
+# Token persiste em ~/.cursor/cli-config.json (volume aiworkspace_cursor)
+
+# Opção B: API key — configure CURSOR_API_KEY no stack file
+
+# ── OpenCode CLI ──
+opencode auth login
+# Interativo: escolhe provider (Anthropic, OpenAI, Google, etc.) e cola a key.
+# Suporta múltiplos providers ao mesmo tempo.
+opencode auth list
+# Auth persiste em ~/.local/share/opencode/auth.json (volume aiworkspace_opencode)
 ```
 
-> **NOTA**: A auth do Claude persiste no volume `aiworkspace_claude`.
-> A API key do Gemini fica no `~/.bashrc` dentro do container — se recriar
-> o container, re-exporte ou configure direto no YAML do stack.
+> **NOTA sobre persistência**: Claude, Qwen, Cursor e OpenCode guardam credenciais
+> em arquivos dentro de volumes dedicados — sobrevivem a rebuild. Já o Gemini usa
+> apenas env vars (`GEMINI_API_KEY`); a forma robusta é declará-las em
+> `aiworkspace.yaml` na seção `environment:` do serviço, não no `~/.bashrc`
+> interno (que é recriado a cada rebuild).
 
 ---
 
 ## Passo 7: Configurar GitHub e clonar projetos
 
 ```bash
-aiw
+ai-enter
 
 # Gerar chave SSH
 ssh-keygen -t ed25519 -C "ai-workspace"
@@ -289,7 +308,7 @@ git config --global user.email "seu@email.com"
 
 # Sair e abrir workspace
 exit
-aidev meu-projeto
+ai-dev meu-projeto
 ```
 
 A chave SSH persiste no volume `aiworkspace_ssh` — não precisa refazer no rebuild.
@@ -299,31 +318,40 @@ Para múltiplas contas GitHub, veja o **Apêndice A** no final deste documento.
 
 ## Uso diário
 
-### Comando `aidev` — workspace modular
+### Comando `ai-dev` — workspace modular
 
-O `aidev` sempre abre Claude Code + shell. Os demais agents são opcionais:
+Por padrão, `ai-dev` abre **todos** os agents (Claude + Gemini + Qwen + Cursor + OpenCode). Pra abrir só um subconjunto, nomeie as ferramentas que quer:
 
 ```bash
+# Padrão — todos os agents
+ai-dev meu-projeto
+
 # Só Claude (leve, ~100MB RAM)
-aidev meu-projeto
+ai-dev meu-projeto --claude
 
-# Claude + Gemini
-aidev meu-projeto --gemini
+# Combinar quem quiser (sem Claude também é válido)
+ai-dev meu-projeto --claude --gemini
+ai-dev meu-projeto --qwen --cursor
+ai-dev meu-projeto --opencode
 
-# Claude + Qwen
-aidev meu-projeto --qwen
+# --all é sinônimo explícito do padrão
+ai-dev meu-projeto --all
 
-# Claude + Gemini + Qwen + Browser (completo)
-aidev meu-projeto --all
-
-# Combinar flags livremente
-aidev meu-projeto --gemini --browser --rc
-
-# Modo danger (skip-permissions + yolo em todos)
-aidev meu-projeto --danger
-aidev meu-projeto --all --danger
-aidanger meu-projeto                   # atalho pra --all --danger
+# Modificadores (não contam como "agent flag" — não desativam o padrão)
+ai-dev meu-projeto --rc                 # adiciona Remote Control no Claude
+ai-dev meu-projeto --danger             # skip-permissions/yolo em quem suporta
+ai-dev-danger meu-projeto                   # atalho pra --danger (todos)
 ```
+
+**Flags `--danger` por CLI** (cada uma usa o flag nativo):
+
+| CLI | Flag |
+|-----|------|
+| `claude` | `--dangerously-skip-permissions` |
+| `gemini` | `--yolo` |
+| `qwen` | `--yolo` |
+| `cursor` | `-f` (`--force`) |
+| `opencode` | — (sem equivalente, ignorado) |
 
 ### Dentro do tmux
 
@@ -367,22 +395,22 @@ tmux kill-server                     # matar todas (nuclear)
 
 # Atalho: dentro do container
 ai-kill meu-projeto                  # mata sessão do projeto
-ai-status                            # ver tudo que tá rodando
+ai-sessions                            # ver tudo que tá rodando
 ```
 
 ### Múltiplos projetos ao mesmo tempo
 
-Cada `aidev` cria uma sessão tmux **independente**. Pra ter dois projetos
+Cada `ai-dev` cria uma sessão tmux **independente**. Pra ter dois projetos
 abertos simultaneamente:
 
 ```bash
 # Abre o primeiro
-aidev projeto-a --all
+ai-dev projeto-a --all
 # Trabalha, e quando quiser sair sem matar:
 Ctrl+B d
 
 # Abre o segundo (cria nova sessão)
-aidev projeto-b --all
+ai-dev projeto-b --all
 Ctrl+B d
 
 # Alterna entre eles:
@@ -394,26 +422,13 @@ tmux attach -t projeto-a
 ### Reconectar a um projeto
 
 ```bash
-aidev meu-projeto    # se a sessão já existe, reconecta direto
+ai-dev meu-projeto    # se a sessão já existe, reconecta direto
 ```
 
 ### Pelo app Claude (celular)
 
 Quando usar `--rc`, o Claude Code ativa Remote Control.
 Abra o app Claude no celular → sessão aparece automaticamente com UX nativa.
-
-### Lightpanda (headless browser)
-
-Sobe automaticamente quando usar `--browser` ou `--all`.
-Qualquer ferramenta que precise de browser se conecta em `ws://localhost:9222`.
-
-```bash
-# Dump rápido de uma página
-lightpanda fetch https://example.com
-
-# Puppeteer: browserWSEndpoint: "ws://localhost:9222"
-# Playwright: browser = await chromium.connectOverCDP("http://localhost:9222")
-```
 
 ### Quick Tunnel (acessar localhost de qualquer lugar)
 
@@ -451,7 +466,7 @@ testes, refatorar). Você inicia, faz detach, e volta quando terminar.
 **Modo interativo (wizard):**
 
 ```bash
-aiw
+ai-enter
 cd ~/projects/meu-projeto
 ralph
 # Escolhe o agent, digita o prompt, configura loops, confirma
@@ -460,18 +475,20 @@ ralph
 **Modo direto:**
 
 ```bash
-aiw
+ai-enter
 cd ~/projects/meu-projeto
-ralph -a claude -p "implemente os testes do módulo auth" -d -m 30
-ralph -a gemini -f prompt.md
-ralph -a qwen -p "refatore o componente X" --done "FINALIZADO"
+ralph -a claude   -p "implemente os testes do módulo auth" -d -m 30
+ralph -a gemini   -f prompt.md
+ralph -a qwen     -p "refatore o componente X" --done "FINALIZADO"
+ralph -a cursor   -p "corrija os warnings do typescript" -d
+ralph -a opencode -p "documente as funções públicas"      # opencode ignora --danger
 ```
 
 **Flags:**
 
 | Flag | Descrição | Default |
 |------|-----------|---------|
-| `-a, --agent` | claude, gemini ou qwen | claude |
+| `-a, --agent` | claude, gemini, qwen, cursor ou opencode | claude |
 | `-p, --prompt` | prompt inline | — |
 | `-f, --file` | prompt de arquivo | — |
 | `-m, --max` | máximo de loops | 50 |
@@ -481,7 +498,7 @@ ralph -a qwen -p "refatore o componente X" --done "FINALIZADO"
 **Teste rápido (pasta vazia):**
 
 ```bash
-aiw
+ai-enter
 mkdir -p ~/projects/ralph-teste
 cd ~/projects/ralph-teste
 
@@ -503,13 +520,13 @@ Logs de cada iteração ficam em `.ralph-logs/` dentro do projeto.
 **Workflow típico:**
 
 ```bash
-aiw
+ai-enter
 cd ~/projects/meu-projeto
 ralph -a claude -f prompt.md -d    # inicia o loop
 # Ctrl+C se quiser parar manualmente
 # Ou deixa rodar, sai do container (exit), faz detach (Ctrl+B d)
 # O loop continua na VPS
-# Volta depois: aiw → cd ~/projects/meu-projeto → cat .ralph-logs/loop-*.log
+# Volta depois: ai-enter → cd ~/projects/meu-projeto → cat .ralph-logs/loop-*.log
 ```
 
 ---
@@ -520,11 +537,12 @@ Configure em **Settings > Snippets**:
 
 | Nome     | Comando                        | Descrição                      |
 |----------|--------------------------------|--------------------------------|
-| `aiw`    | `aiw`                          | Entrar no container            |
-| `dev`    | `aidev `                       | Workspace só Claude            |
-| `dev+`   | `aidev  --all`                 | Workspace completo             |
-| `dev-rc` | `aidev  --rc`                  | Workspace + Remote Control     |
-| `ws`     | `aiws`                         | Status das sessões             |
+| `enter`  | `ai-enter`                     | Entrar no container            |
+| `dev`    | `ai-dev`                       | Workspace (todos os agents)    |
+| `claude` | `ai-dev --claude`              | Workspace só Claude            |
+| `dev-rc` | `ai-dev --rc`                  | Workspace + Remote Control     |
+| `ws`     | `ai-sessions`                  | Status das sessões             |
+| `help`   | `ai-help`                      | Ajuda dos comandos             |
 
 ---
 
@@ -551,44 +569,62 @@ docker exec -u root $(docker ps -q -f name=aiworkspace) pip install nome-do-paco
 Pacotes instalados assim **não sobrevivem a rebuild**. Se for algo que usa sempre,
 adicione ao Dockerfile e faça rebuild.
 
-### Atualizar a imagem (recomendado)
+### Atualizar as CLIs (regra geral)
 
-A imagem é mantida no GitHub Container Registry e atualizada automaticamente
-via GitHub Actions. Pra puxar a versão mais nova:
+**A forma confiável de atualizar qualquer CLI é rebuild da imagem + `ai-update`.**
+Não confie em auto-updaters dentro do container — eles ou estão bloqueados pelo
+layout do Dockerfile (Claude, Cursor) ou são apagados no próximo rebuild
+(npm-installed CLIs).
 
 ```bash
-# Atalho simples
-aiupdate
+# Na VPS:
+ai-update
 
 # O que ele faz por trás:
 docker pull ghcr.io/ffmenezes/ai-workspace:latest
 docker service update --image ghcr.io/ffmenezes/ai-workspace:latest --force aiworkspace_workspace
 ```
 
-Os volumes persistem — projetos, auth, SSH keys, tudo preservado.
+A imagem é buildada automaticamente pelo GitHub Actions a cada push em `main`.
+Logo, fluxo típico de update:
 
-### Atualizar ferramentas pontualmente (sem rebuild)
+1. Mudar Dockerfile (ou esperar rebuild diário, se configurado)
+2. `git push`
+3. Aguardar Actions (~5-10min)
+4. Na VPS: `ai-update`
+5. Sessões tmux antigas morrem (esperado), volumes persistem
+
+Para usar uma instância Swarm com nome diferente, exporte
+`AI_WORKSPACE_SERVICE=meu_servico` antes de chamar `ai-update`.
+
+### Por que rebuild e não auto-update?
+
+| CLI | Auto-update funciona? | Por quê |
+|-----|------------------------|---------|
+| Claude Code | ❌ | O binário é copiado pra `/opt/claude` (read-only) e symlinkado em `/usr/local/bin`. O auto-updater nativo baixa novas versões em `~/.local/share/claude/versions/`, mas o symlink em PATH continua apontando pra versão de build — então o update silencioso acontece, mas nunca é executado. |
+| Cursor CLI | ❌ | Mesmo problema (`/opt/cursor-agent` read-only). |
+| Gemini / Qwen / OpenCode | Parcial | São pacotes npm globais. `npm update -g <pkg>` dentro do container funciona, mas o resultado vive só naquela instância — qualquer rebuild apaga. |
+
+### Atualizar pontualmente (efêmero, só dura até o próximo rebuild)
 
 ```bash
-aiw
+ai-enter
 
-# Claude Code — atualiza automaticamente (native installer)
-claude --version
+npm update -g @google/gemini-cli      # Gemini
+npm update -g @qwen-code/qwen-code    # Qwen
+npm update -g opencode-ai             # OpenCode
 
-# Gemini CLI
-npm update -g @google/gemini-cli
-
-# Qwen Code
-npm update -g @qwen-code/qwen-code
-
-# Cursor CLI — atualiza automaticamente
-cursor --version
+# Claude e Cursor: NÃO há caminho pontual confiável — só rebuild.
 ```
+
+Se uma CLI precisar de versão fixa, edite o Dockerfile e dispare rebuild via
+push. Versões "pinadas" via `ARG` ainda não estão implementadas (ver
+`CLAUDE.md` em "Known limitations").
 
 ### Backup dos volumes
 
 ```bash
-for vol in projects config claude gemini ssh; do
+for vol in projects config claude gemini qwen cursor opencode ssh; do
     docker run --rm \
         -v aiworkspace_${vol}:/data \
         -v /opt/backups:/backup \
@@ -612,18 +648,17 @@ docker run --rm \
 ## Checklist de verificação
 
 ```bash
-aiw                           # ✅ Entrou no container
+ai-enter                      # ✅ Entrou no container
 claude --version              # ✅ Claude Code
 gemini --version              # ✅ Gemini CLI
 qwen --version                # ✅ Qwen Code
-lightpanda --help             # ✅ Lightpanda
 cloudflared --version         # ✅ cloudflared
 claude -p "ping"              # ✅ Auth Claude
-aidev teste                   # ✅ Workspace criado (Ctrl+B d pra sair)
+ai-dev teste                   # ✅ Workspace criado (Ctrl+B d pra sair)
 ai-kill teste                 # ✅ Cleanup
-ai-status                     # ✅ Status
+ai-sessions                     # ✅ Status
 exit
-aidev teste --all             # ✅ Workspace completo do host
+ai-dev teste --all             # ✅ Workspace completo do host
 ```
 
 ---
@@ -634,7 +669,6 @@ aidev teste --all             # ✅ Workspace completo do host
 - Tokens ficam dentro dos volumes (não expostos no YAML)
 - `network_swarm_public` dá acesso ao Postgres, Redis, etc. — útil se MCPs precisarem
 - Claude Remote Control usa outbound HTTPS — não abre portas
-- Lightpanda CDP server roda interno ao container (não exposto ao host)
 - Limites de CPU/RAM controlados pelo Swarm (`deploy.resources.limits`)
 - Pra proteger `~/.bashrc` com tokens: `chmod 600 ~/.bashrc` dentro do container
 
@@ -655,7 +689,7 @@ git init
 git add .
 git commit -m "Initial commit"
 git branch -M main
-git remote add origin git@github.com:SEU_USUARIO/ai-workspace.git
+git remote add origin git@github.com:ffmenezes/ai-workspace.git
 git push -u origin main
 ```
 
@@ -676,11 +710,11 @@ git commit -m "feat: adiciona ferramenta X"
 git push
 
 # 3. Acompanhar build
-# https://github.com/SEU_USUARIO/ai-workspace/actions
+# https://github.com/ffmenezes/ai-workspace/actions
 
 # 4. Após o build (~5-10min), atualizar na VPS
 ssh sua-vps
-aiupdate
+ai-update
 ```
 
 ### Versionamento (tags)
@@ -696,14 +730,14 @@ A Action vai publicar 3 tags da imagem: `latest`, `1.0.0`, `1.0`. Aí
 outras pessoas podem fixar versão:
 
 ```yaml
-image: ghcr.io/SEU_USUARIO/ai-workspace:1.0.0
+image: ghcr.io/ffmenezes/ai-workspace:1.0.0
 ```
 
 ### Pull manual de versões específicas
 
 ```bash
-docker pull ghcr.io/SEU_USUARIO/ai-workspace:1.0.0
-docker pull ghcr.io/SEU_USUARIO/ai-workspace:latest
+docker pull ghcr.io/ffmenezes/ai-workspace:1.0.0
+docker pull ghcr.io/ffmenezes/ai-workspace:latest
 ```
 
 ---
@@ -714,7 +748,7 @@ O GitHub não permite a mesma chave SSH em mais de uma conta. Se você usa
 mais de uma conta (pessoal + trabalho), gere uma chave separada pra cada:
 
 ```bash
-aiw
+ai-enter
 
 # Chave da conta principal (já criada no passo 7)
 # ~/.ssh/id_ed25519

@@ -1,0 +1,27 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# ai-kill-all — Mata TODAS as sessões tmux de projeto
+# Preserva a sessão "main" criada no boot do container.
+# ══════════════════════════════════════════════════════════════
+
+SESSIONS=$(tmux ls -F '#{session_name}' 2>/dev/null | grep -v '^main$' || true)
+
+if [ -z "$SESSIONS" ]; then
+    echo "ℹ️  Nenhuma sessão de projeto pra matar."
+    exit 0
+fi
+
+echo "Sessões a matar:"
+echo "$SESSIONS" | sed 's/^/  - /'
+read -rp "Confirmar? [s/N]: " CONFIRM
+case "$CONFIRM" in
+    s|S|sim|y|Y|yes)
+        echo "$SESSIONS" | while read -r s; do
+            tmux kill-session -t "$s" 2>/dev/null
+            echo "  ✓ $s"
+        done
+        ;;
+    *)
+        echo "Cancelado."
+        ;;
+esac

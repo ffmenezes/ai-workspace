@@ -21,85 +21,165 @@ cat >> ~/.bashrc << 'ALIASES'
 
 # AI_WORKSPACE_ALIASES_START
 # ══════════════════════════════════════════════════════════════
-# AI Workspace — atalhos para acessar o container
-# Busca qualquer container com "aiworkspace" no nome
+# AI Workspace — atalhos do host para o container
+# Convenção: todo comando começa com "ai-" e é auto-explicativo.
 # ══════════════════════════════════════════════════════════════
 
-_aiw_container() {
+_ai_container() {
     docker ps -q -f name=aiworkspace | head -1
 }
 
-# Entrar no container (zsh)
-aiw() {
-    local CID=$(_aiw_container)
+_ai_require_container() {
+    local CID
+    CID=$(_ai_container)
     if [ -z "$CID" ]; then
-        echo "❌ Container ai-workspace não está rodando."
-        echo "   docker service ls | grep aiworkspace"
+        echo "❌ Container ai-workspace não está rodando." >&2
+        echo "   docker service ls | grep aiworkspace" >&2
         return 1
     fi
+    echo "$CID"
+}
+
+# Entrar no container (shell zsh interativo)
+ai-enter() {
+    local CID; CID=$(_ai_require_container) || return 1
     docker exec -it "$CID" zsh -l
 }
 
-# Entrar direto no tmux do container
-ait() {
-    local CID=$(_aiw_container)
-    if [ -z "$CID" ]; then
-        echo "❌ Container ai-workspace não está rodando."
-        return 1
-    fi
+# Anexar ao tmux principal do container
+ai-attach() {
+    local CID; CID=$(_ai_require_container) || return 1
     docker exec -it "$CID" tmux attach -t main 2>/dev/null \
         || docker exec -it "$CID" zsh -l
 }
 
-# Criar/reconectar workspace de projeto direto do host
-aidev() {
-    local CID=$(_aiw_container)
-    if [ -z "$CID" ]; then
-        echo "❌ Container ai-workspace não está rodando."
-        return 1
-    fi
-    docker exec -it "$CID" zsh -lc "aidev $*"
+# Criar/reconectar workspace tmux de um projeto
+# Uso: ai-dev <projeto> [--claude] [--gemini] [--qwen] [--cursor] [--opencode] [--rc] [--danger]
+ai-dev() {
+    local CID; CID=$(_ai_require_container) || return 1
+    docker exec -it "$CID" zsh -lc "ai-dev $*"
 }
 
-# Workspace em modo danger (Claude skip-permissions + outros em yolo)
-aidanger() {
-    local CID=$(_aiw_container)
-    if [ -z "$CID" ]; then
-        echo "❌ Container ai-workspace não está rodando."
-        return 1
-    fi
-    docker exec -it "$CID" zsh -lc "aidev $1 --all --danger"
+# Atalho: workspace com todos os agents em modo danger
+ai-dev-danger() {
+    local CID; CID=$(_ai_require_container) || return 1
+    docker exec -it "$CID" zsh -lc "ai-dev $1 --danger"
 }
 
-# Status do workspace
-aiws() {
-    local CID=$(_aiw_container)
-    if [ -z "$CID" ]; then
-        echo "❌ Container ai-workspace não está rodando."
-        return 1
-    fi
-    docker exec -it "$CID" ai-status
+# Listar sessões tmux ativas no container
+ai-sessions() {
+    local CID; CID=$(_ai_require_container) || return 1
+    docker exec -it "$CID" ai-sessions
 }
 
-# Corrigir permissões dos arquivos em ~/projects (após upload via Portainer/SCP)
-aifix() {
-    local CID=$(_aiw_container)
-    if [ -z "$CID" ]; then
-        echo "❌ Container ai-workspace não está rodando."
-        return 1
-    fi
+# Matar uma sessão tmux específica
+ai-kill() {
+    local CID; CID=$(_ai_require_container) || return 1
+    docker exec -it "$CID" ai-kill "$1"
+}
+
+# Matar TODAS as sessões tmux de projeto (preserva "main")
+ai-kill-all() {
+    local CID; CID=$(_ai_require_container) || return 1
+    docker exec -it "$CID" ai-kill-all
+}
+
+# Corrigir permissões em ~/projects (após upload via Portainer/SCP)
+ai-fix-perms() {
+    local CID; CID=$(_ai_require_container) || return 1
     docker exec -u root "$CID" chown -R dev:dev /home/dev/projects
     echo "✅ Permissões corrigidas em ~/projects"
 }
 
-# Atualizar imagem do AI Workspace (puxa última versão do ghcr.io)
-aiupdate() {
+# Atualizar imagem do AI Workspace (pull + force update do serviço Swarm)
+# Service name overridable via AI_WORKSPACE_SERVICE env var.
+ai-update() {
     local IMAGE="${1:-ghcr.io/ffmenezes/ai-workspace:latest}"
+    local SERVICE="${AI_WORKSPACE_SERVICE:-aiworkspace_workspace}"
+
+    # Avisar se há sessões tmux que vão morrer no restart
+    local CID; CID=$(_ai_container)
+    if [ -n "$CID" ]; then
+        local ACTIVE
+        ACTIVE=$(docker exec "$CID" tmux ls -F '#{session_name}' 2>/dev/null | grep -v '^main$' || true)
+        if [ -n "$ACTIVE" ]; then
+            echo "⚠️  As seguintes sessões tmux serão encerradas pelo restart:"
+            echo "$ACTIVE" | sed 's/^/    - /'
+            read -rp "Continuar? [s/N]: " CONFIRM
+            case "$CONFIRM" in
+                s|S|sim|y|Y|yes) ;;
+                *) echo "Cancelado."; return 0 ;;
+            esac
+        fi
+    fi
+
     echo "📥 Baixando imagem: $IMAGE"
     docker pull "$IMAGE" || { echo "❌ Falha no pull"; return 1; }
-    echo "♻️  Atualizando serviço Swarm..."
-    docker service update --image "$IMAGE" --force aiworkspace_workspace
+    echo "♻️  Atualizando serviço Swarm: $SERVICE"
+    docker service update --image "$IMAGE" --force "$SERVICE"
     echo "✅ Workspace atualizado"
+}
+
+# Ajuda — lista todos os comandos ai-* disponíveis
+ai-help() {
+    cat << 'HELP'
+╔══════════════════════════════════════════════════════════════════════╗
+║  AI Workspace — referência de comandos                               ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+  Coluna "Onde":
+    H   = roda no HOST da VPS (após setup-host-aliases.sh)
+    C   = roda dentro do CONTAINER (após ai-enter)
+    H/C = mesmo nome existe nos dois lugares; o do host só faz
+          docker exec do equivalente interno (use de qualquer um)
+
+  Comando                    Onde   Descrição
+  ────────────────────────── ────── ────────────────────────────────────
+  ai-enter                   H      Shell zsh dentro do container
+  ai-attach                  H      Anexa ao tmux principal (sessão "main")
+  ai-update [imagem]         H      Pull + force update do serviço Swarm
+                                    (AI_WORKSPACE_SERVICE override do nome)
+  ai-fix-perms               H      Corrige owner em ~/projects (dev:dev)
+  ai-help                    H      Esta ajuda
+
+  ai-dev <projeto> [flags]   H/C    Cria/reconecta workspace tmux do projeto
+  ai-dev-danger <projeto>    H/C    Atalho: ai-dev <projeto> --danger
+  ai-sessions                H/C    Lista sessões tmux + processos + recursos
+  ai-kill <projeto>          H/C    Mata uma sessão tmux específica
+  ai-kill-all                H/C    Mata TODAS as sessões (preserva "main")
+
+  ralph -a <agent> -p "..."  C      Loop autônomo de um agent até concluir
+  claude / gemini / qwen     C      Invocar uma CLI diretamente
+  cursor / opencode          C      (idem)
+
+  Flags do ai-dev
+  ───────────────
+  (sem flag)         abre TODOS os agents (= --all)
+  --claude           só Claude
+  --gemini           só Gemini
+  --qwen             só Qwen
+  --cursor           só Cursor
+  --opencode         só OpenCode
+  (combine livre)    --claude --gemini, --qwen --cursor, etc.
+  --rc               adiciona Remote Control no Claude
+  --danger           skip-permissions/yolo nos agents que suportam
+
+  Flags --danger por CLI
+  ──────────────────────
+  claude    --dangerously-skip-permissions
+  gemini    --yolo
+  qwen      --yolo
+  cursor    -f
+  opencode  (sem equivalente — ignorado)
+
+  Como atualizar as CLIs
+  ──────────────────────
+  Único caminho confiável: rebuild da imagem (push pra GitHub → Actions
+  builda) + ai-update na VPS. Auto-updaters do Claude/Cursor estão
+  bloqueados pelo layout do Dockerfile (binários em /opt read-only).
+  Detalhes em README "Por que rebuild e não auto-update?".
+
+HELP
 }
 # AI_WORKSPACE_ALIASES_END
 
@@ -108,13 +188,16 @@ ALIASES
 echo ""
 echo "✅ Aliases instalados!"
 echo ""
-echo "   aiw       → Entrar no container (zsh)"
-echo "   ait       → Entrar direto no tmux do container"
-echo "   aidev X   → Criar/reconectar workspace do projeto X"
-echo "   aidanger X → Workspace com skip-permissions + yolo"
-echo "   aiws      → Ver status das sessões"
-echo "   aifix     → Corrigir permissões após upload via Portainer/SCP"
-echo "   aiupdate  → Atualizar imagem do workspace (pull + restart)"
+echo "   ai-enter           → Shell zsh dentro do container"
+echo "   ai-attach          → Anexar ao tmux principal"
+echo "   ai-dev <proj>      → Workspace de projeto (todos os agents por padrão)"
+echo "   ai-dev-danger <p>  → Workspace com --danger"
+echo "   ai-sessions        → Listar sessões tmux"
+echo "   ai-kill <proj>     → Matar sessão"
+echo "   ai-kill-all        → Matar todas as sessões de projeto"
+echo "   ai-fix-perms       → Corrigir permissões em ~/projects"
+echo "   ai-update          → Pull + restart do serviço"
+echo "   ai-help            → Ajuda completa"
 echo ""
-echo "⚡ Rode agora:  source ~/.bashrc"
+echo "⚡ Rode agora:  source ~/.bashrc  &&  ai-help"
 echo ""

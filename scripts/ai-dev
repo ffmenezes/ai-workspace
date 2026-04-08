@@ -1,0 +1,141 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# ai-dev — Cria/reconecta workspace tmux por projeto
+#
+# Uso:
+#   ai-dev <projeto>                     → padrão: TODOS os agents (= --all)
+#   ai-dev <projeto> --claude            → só Claude
+#   ai-dev <projeto> --claude --gemini   → Claude + Gemini
+#   ai-dev <projeto> --qwen --cursor     → Qwen + Cursor
+#   ai-dev <projeto> --rc                → adiciona Remote Control no Claude
+#   ai-dev <projeto> --danger            → skip-permissions/yolo nos agents que suportam
+#
+# Regras:
+#   • Sem nenhuma flag de agent → abre TODOS (claude, gemini, qwen, cursor, opencode)
+#   • Com qualquer flag de agent → abre SOMENTE os nomeados
+#   • --all é aceito como sinônimo explícito do padrão
+#   • --rc e --danger são flags modificadoras (não contam como "agent flag")
+#
+# Flags de prompt one-shot (referência — usadas pelo ralph, não pelo ai-dev):
+#   claude   -p "prompt"                  (--print)
+#   gemini   -p "prompt"                  (--prompt)
+#   qwen     -p "prompt"                  (--prompt)
+#   cursor   -p "prompt"                  (cursor-agent --print)
+#   opencode run "prompt"                 (subcomando, não flag)
+#
+# Flags de "danger" por CLI:
+#   claude   --dangerously-skip-permissions
+#   gemini   --yolo
+#   qwen     --yolo
+#   cursor   -f                           (--force)
+#   opencode (sem equivalente — ignora --danger)
+# ══════════════════════════════════════════════════════════════
+set -e
+
+PROJECT="${1:?Uso: ai-dev <projeto> [--claude] [--gemini] [--qwen] [--cursor] [--opencode] [--all] [--rc] [--danger]}"
+shift
+
+# ── Parsear flags ──
+RC=false
+DANGER=false
+CLAUDE=false
+GEMINI=false
+QWEN=false
+CURSOR=false
+OPENCODE=false
+ANY_AGENT=false
+
+for flag in "$@"; do
+    case "$flag" in
+        --rc)       RC=true ;;
+        --danger)   DANGER=true ;;
+        --claude)   CLAUDE=true;   ANY_AGENT=true ;;
+        --gemini)   GEMINI=true;   ANY_AGENT=true ;;
+        --qwen)     QWEN=true;     ANY_AGENT=true ;;
+        --cursor)   CURSOR=true;   ANY_AGENT=true ;;
+        --opencode) OPENCODE=true; ANY_AGENT=true ;;
+        --all)      ANY_AGENT=false ;;  # força padrão (todos)
+    esac
+done
+
+# ── Padrão: se nenhum agent foi nomeado, abre todos ──
+if ! $ANY_AGENT; then
+    CLAUDE=true
+    GEMINI=true
+    QWEN=true
+    CURSOR=true
+    OPENCODE=true
+fi
+
+DIR="$HOME/projects/$PROJECT"
+mkdir -p "$DIR"
+
+# ── Reconectar se já existe ──
+if tmux has-session -t "$PROJECT" 2>/dev/null; then
+    echo "♻️  Reconectando na sessão '$PROJECT'..."
+    tmux attach -t "$PROJECT"
+    exit 0
+fi
+
+echo "🚀 Criando workspace '$PROJECT'..."
+
+# ── Montar comandos (cada CLI tem seu próprio danger flag) ──
+CLAUDE_CMD="claude"
+$RC     && CLAUDE_CMD="$CLAUDE_CMD --remote-control"
+$DANGER && CLAUDE_CMD="$CLAUDE_CMD --dangerously-skip-permissions"
+
+GEMINI_CMD="gemini --resume"
+$DANGER && GEMINI_CMD="$GEMINI_CMD --yolo"
+
+QWEN_CMD="qwen"
+$DANGER && QWEN_CMD="$QWEN_CMD --yolo"
+
+CURSOR_CMD="cursor"
+$DANGER && CURSOR_CMD="$CURSOR_CMD -f"
+
+# opencode não tem equivalente a yolo/skip-permissions
+OPENCODE_CMD="opencode"
+
+# ── Criar sessão (window inicial é a primeira CLI ativa) ──
+FIRST_WINDOW_CREATED=false
+
+open_window() {
+    local name="$1"
+    local cmd="$2"
+    if ! $FIRST_WINDOW_CREATED; then
+        tmux new-session -d -s "$PROJECT" -n "$name" -c "$DIR"
+        FIRST_WINDOW_CREATED=true
+    else
+        tmux new-window -t "$PROJECT" -n "$name" -c "$DIR"
+    fi
+    tmux send-keys -t "$PROJECT" "$cmd" C-m
+}
+
+$CLAUDE   && open_window "claude"   "$CLAUDE_CMD"
+$GEMINI   && open_window "gemini"   "$GEMINI_CMD"
+$QWEN     && open_window "qwen"     "$QWEN_CMD"
+$CURSOR   && open_window "cursor"   "$CURSOR_CMD"
+$OPENCODE && open_window "opencode" "$OPENCODE_CMD"
+
+# ── Shell livre (sempre) ──
+if ! $FIRST_WINDOW_CREATED; then
+    tmux new-session -d -s "$PROJECT" -n "shell" -c "$DIR"
+else
+    tmux new-window -t "$PROJECT" -n "shell" -c "$DIR"
+fi
+
+# ── Focar na primeira window ──
+tmux select-window -t "$PROJECT":1
+
+# ── Info ──
+AGENTS=""
+$CLAUDE   && AGENTS="${AGENTS}${AGENTS:+ + }claude"
+$GEMINI   && AGENTS="${AGENTS}${AGENTS:+ + }gemini"
+$QWEN     && AGENTS="${AGENTS}${AGENTS:+ + }qwen"
+$CURSOR   && AGENTS="${AGENTS}${AGENTS:+ + }cursor"
+$OPENCODE && AGENTS="${AGENTS}${AGENTS:+ + }opencode"
+echo "   Agents: ${AGENTS:-shell only}"
+$DANGER && echo "⚠️  Modo DANGER ativo (opencode ignora — sem equivalente)"
+
+# ── Attach ──
+tmux attach -t "$PROJECT"

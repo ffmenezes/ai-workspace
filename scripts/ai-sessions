@@ -1,6 +1,6 @@
 #!/bin/bash
 # ══════════════════════════════════════════════════════════════
-# ai-status — Status de todas as sessões e recursos
+# ai-sessions — Status de todas as sessões tmux e recursos do workspace
 # ══════════════════════════════════════════════════════════════
 
 echo "══════════════════════════════════════"

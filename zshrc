@@ -29,8 +29,6 @@ alias lt='eza -la --tree --level=2 --icons'
 alias lsi='eza --icons --group-directories-first'
 
 # ── AI Workspace aliases ──
-alias ws='ai-status'
-alias wsk='ai-kill'
 alias tls='tmux ls'
 alias ta='tmux attach -t'
 

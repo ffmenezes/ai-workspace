@@ -1,28 +1,12 @@
 version: "3.7"
 
 # ══════════════════════════════════════════════════════════════
-# AI Workspace — Claude Code + Gemini + Qwen + Cursor + Lightpanda
-# Deploy via Portainer > Stacks > Add Stack
-#
-# PRÉ-REQUISITOS (rodar no terminal da VPS antes do deploy):
-#   docker volume create aiworkspace_projects
-#   docker volume create aiworkspace_config
-#   docker volume create aiworkspace_claude
-#   docker volume create aiworkspace_gemini
-#   docker volume create aiworkspace_ssh
-#
-# IMAGEM:
-#   Por padrão usa a imagem pública do GitHub Container Registry.
-#   Pra usar imagem local, troque a linha "image:" abaixo.
-#
-# ATUALIZAR:
-#   docker service update --image ghcr.io/SEU_USUARIO/ai-workspace:latest aiworkspace_workspace
+# AI Workspace — Claude Code + Gemini + Qwen + Cursor + OpenCode
 # ══════════════════════════════════════════════════════════════
 
 services:
   workspace:
-    # ⚠️ TROQUE "SEU_USUARIO" pelo seu usuário do GitHub (lowercase)
-    image: ghcr.io/SEU_USUARIO/ai-workspace:latest
+    image: ghcr.io/ffmenezes/ai-workspace:latest
     hostname: "{{.Service.Name}}.{{.Task.Slot}}"
 
     stdin_open: true
@@ -34,12 +18,22 @@ services:
     environment:
       - TERM=xterm-256color
       - LANG=C.UTF-8
+      # ── Auth de CLIs (descomente e preencha o que usar) ──
+      # - GEMINI_API_KEY=
+      # - CURSOR_API_KEY=
+      # Qwen com API key (alternativa ao OAuth):
+      # - OPENAI_API_KEY=
+      # - OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+      # - OPENAI_MODEL=qwen3-coder-plus
 
     volumes:
       - aiworkspace_projects:/home/dev/projects
       - aiworkspace_config:/home/dev/.config
       - aiworkspace_claude:/home/dev/.claude
       - aiworkspace_gemini:/home/dev/.gemini
+      - aiworkspace_qwen:/home/dev/.qwen
+      - aiworkspace_cursor:/home/dev/.cursor
+      - aiworkspace_opencode:/home/dev/.local/share/opencode
       - aiworkspace_ssh:/home/dev/.ssh
 
     deploy:
@@ -69,6 +63,15 @@ volumes:
   aiworkspace_gemini:
     external: true
     name: aiworkspace_gemini
+  aiworkspace_qwen:
+    external: true
+    name: aiworkspace_qwen
+  aiworkspace_cursor:
+    external: true
+    name: aiworkspace_cursor
+  aiworkspace_opencode:
+    external: true
+    name: aiworkspace_opencode
   aiworkspace_ssh:
     external: true
     name: aiworkspace_ssh

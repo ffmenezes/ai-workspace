@@ -92,11 +92,16 @@ ENV PLAYWRIGHT_BROWSERS_PATH="/opt/ms-playwright"
 # ══════════════════════════════════════════════════════════════
 
 # ── Usuário não-root com zsh ──
+# Cria os mountpoints pra todos os volumes do stack — sem isso, mounts viram
+# diretórios root-owned e o user `dev` perde acesso à própria auth.
 RUN useradd -m -s /bin/zsh dev \
     && mkdir -p /home/dev/projects \
     && mkdir -p /home/dev/.config \
     && mkdir -p /home/dev/.claude \
     && mkdir -p /home/dev/.gemini \
+    && mkdir -p /home/dev/.qwen \
+    && mkdir -p /home/dev/.cursor \
+    && mkdir -p /home/dev/.local/share/opencode \
     && mkdir -p /home/dev/.ssh \
     && mkdir -p /home/dev/bin \
     && chown -R dev:dev /home/dev
@@ -117,8 +122,21 @@ RUN npm install -g @qwen-code/qwen-code
 # ── Cursor CLI ──
 RUN curl -fsSL https://cursor.com/install | bash
 
+# ── OpenCode CLI ──
+RUN npm install -g opencode-ai
+
 # ══════════════════════════════════════════════════════════════
 # LAYER 6: Fix permissões (depende das CLIs acima)
+#
+# Claude e Cursor instalam em /root/.local/share/{claude,cursor-agent}/ e os
+# binários ficam inacessíveis pro user `dev`. Aqui copiamos pra /opt/* e
+# symlinkamos em /usr/local/bin (read-only, world-readable).
+#
+# Side effect intencional: o auto-updater nativo dessas CLIs grava novas
+# versões em ~/.local/share/.../versions/, mas o symlink em PATH continua
+# apontando pra versão de build em /opt — então auto-updates SÃO BAIXADOS
+# MAS NUNCA EXECUTADOS. Atualizar Claude/Cursor exige rebuild da imagem.
+# Ver README "Por que rebuild e não auto-update?".
 # ══════════════════════════════════════════════════════════════
 
 RUN mkdir -p /opt/claude \

@@ -10,11 +10,11 @@
 #   ralph -a gemini -f prompt.md   → prompt de arquivo
 #
 # Flags:
-#   -a, --agent     claude|gemini|qwen (default: claude)
+#   -a, --agent     claude|gemini|qwen|cursor|opencode (default: claude)
 #   -p, --prompt    prompt inline
 #   -f, --file      prompt de arquivo
 #   -m, --max       máximo de loops (default: 50)
-#   -d, --danger    skip-permissions/yolo
+#   -d, --danger    skip-permissions/yolo (opencode ignora — sem equivalente)
 #   --done          palavra de parada (default: RALPH_DONE)
 # ══════════════════════════════════════════════════════════════
 set -e
@@ -55,12 +55,16 @@ if [ -z "$AGENT" ]; then
     echo "  1) Claude Code"
     echo "  2) Gemini CLI"
     echo "  3) Qwen Code"
+    echo "  4) Cursor CLI"
+    echo "  5) OpenCode CLI"
     echo ""
     read -rp "Escolha [1]: " AGENT_CHOICE
     case "${AGENT_CHOICE:-1}" in
         1) AGENT="claude" ;;
         2) AGENT="gemini" ;;
         3) AGENT="qwen" ;;
+        4) AGENT="cursor" ;;
+        5) AGENT="opencode" ;;
         *) AGENT="claude" ;;
     esac
 fi
@@ -135,8 +139,16 @@ case "$AGENT" in
         AGENT_CMD="qwen -p"
         $DANGER && AGENT_CMD="qwen --yolo -p"
         ;;
+    cursor)
+        AGENT_CMD="cursor -p"
+        $DANGER && AGENT_CMD="cursor -f -p"
+        ;;
+    opencode)
+        # opencode usa subcomando `run` pra one-shot; não tem yolo/skip-permissions
+        AGENT_CMD="opencode run"
+        ;;
     *)
-        echo "❌ Agent '$AGENT' não reconhecido. Use: claude, gemini, qwen"
+        echo "❌ Agent '$AGENT' não reconhecido. Use: claude, gemini, qwen, cursor, opencode"
         exit 1
         ;;
 esac
