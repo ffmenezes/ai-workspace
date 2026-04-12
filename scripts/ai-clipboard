@@ -1,0 +1,353 @@
+#!/usr/bin/env node
+// ══════════════════════════════════════════════════════════════
+// ai-clipboard — Web clipboard bridge para AI Workspace
+//
+// Serve uma página onde Ctrl+V cola imagens do clipboard local.
+// Imagens são salvas em ~/.clipboard/ e o @path é copiado
+// automaticamente para o clipboard do browser.
+//
+// Uso: ai-clipboard [porta]    (default: 3456)
+//
+// Zero dependências — só Node.js built-in modules.
+// ══════════════════════════════════════════════════════════════
+
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+const PORT = parseInt(process.argv[2] || '3456', 10);
+const SAVE_DIR = path.join(os.homedir(), '.clipboard');
+
+fs.mkdirSync(SAVE_DIR, { recursive: true });
+
+const HTML = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Workspace — Clipboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+  }
+  h1 { font-size: 1.2rem; color: #7c83ff; margin-bottom: 0.5rem; }
+  .hint { font-size: 0.85rem; color: #888; margin-bottom: 1.5rem; }
+  #drop-zone {
+    width: min(90vw, 600px);
+    height: 300px;
+    border: 2px dashed #444;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  #drop-zone:hover, #drop-zone.active { border-color: #7c83ff; background: #1a1a3e; }
+  #drop-zone img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    position: absolute;
+    inset: 0;
+    margin: auto;
+  }
+  .placeholder { color: #555; font-size: 0.95rem; text-align: center; line-height: 1.6; }
+  #result {
+    margin-top: 1rem;
+    padding: 0.6rem 1.2rem;
+    background: #16213e;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    min-height: 2.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  #result:hover { background: #1a2744; }
+  #result .path { color: #4ecca3; }
+  #result .status { color: #888; font-size: 0.8rem; }
+  .history { margin-top: 1.5rem; width: min(90vw, 600px); }
+  .history h2 { font-size: 0.8rem; color: #555; margin-bottom: 0.4rem; }
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  .history-item {
+    font-size: 0.8rem;
+    color: #666;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    transition: background 0.1s;
+  }
+  .history-item:hover { background: #1a1a3e; color: #4ecca3; }
+  .toast {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    background: #4ecca3;
+    color: #1a1a2e;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <h1>AI Workspace Clipboard</h1>
+  <p class="hint">Ctrl+V para colar imagem &middot; ou arraste um arquivo</p>
+  <div id="drop-zone">
+    <div class="placeholder" id="placeholder">
+      Ctrl+V / Cmd+V<br>ou arraste uma imagem aqui
+    </div>
+  </div>
+  <div id="result">
+    <span class="status">aguardando imagem...</span>
+  </div>
+  <div class="history">
+    <h2>Recentes</h2>
+    <div class="history-list" id="history"></div>
+  </div>
+  <div class="toast" id="toast">Copiado!</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const placeholder = document.getElementById('placeholder');
+const result = document.getElementById('result');
+const historyEl = document.getElementById('history');
+const toast = document.getElementById('toast');
+
+function showToast(msg) {
+  toast.textContent = msg || 'Copiado!';
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 1500);
+}
+
+async function copyPath(p) {
+  try {
+    await navigator.clipboard.writeText(p);
+    showToast('Copiado!');
+  } catch {
+    showToast('Falha ao copiar');
+  }
+}
+
+function addHistory(p) {
+  const el = document.createElement('div');
+  el.className = 'history-item';
+  el.textContent = p;
+  el.onclick = () => copyPath(p);
+  historyEl.prepend(el);
+  // keep max 20
+  while (historyEl.children.length > 20) historyEl.lastChild.remove();
+}
+
+async function upload(blob, filename) {
+  placeholder.style.display = 'none';
+  // preview
+  const img = dropZone.querySelector('img') || document.createElement('img');
+  img.src = URL.createObjectURL(blob);
+  if (!img.parentNode) dropZone.appendChild(img);
+
+  result.innerHTML = '<span class="status">enviando...</span>';
+
+  const form = new FormData();
+  form.append('image', blob, filename || 'paste.png');
+
+  try {
+    const res = await fetch('/upload', { method: 'POST', body: form });
+    const data = await res.json();
+    const atPath = '@' + data.path;
+    result.innerHTML = '<span class="path">' + atPath + '</span><span class="status">(clique para copiar)</span>';
+    result.onclick = () => copyPath(atPath);
+    addHistory(atPath);
+    // auto-copy
+    await copyPath(atPath);
+  } catch (e) {
+    result.innerHTML = '<span class="status" style="color:#e74c3c">Erro: ' + e.message + '</span>';
+  }
+}
+
+// Paste handler
+document.addEventListener('paste', (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      upload(item.getAsFile());
+      return;
+    }
+  }
+});
+
+// Drag & drop
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('active'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('active');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) upload(file, file.name);
+});
+
+// Click to open file picker
+dropZone.addEventListener('click', () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = () => { if (input.files[0]) upload(input.files[0], input.files[0].name); };
+  input.click();
+});
+</script>
+</body>
+</html>`;
+
+// ── Multipart parser (minimal, handles single file upload) ──
+function parseMultipart(buf, boundary) {
+    const sep = Buffer.from('--' + boundary);
+    const start = buf.indexOf(sep) + sep.length;
+    const end = buf.lastIndexOf(sep);
+    const part = buf.slice(start, end);
+
+    // Find header/body separator (double CRLF)
+    const headerEnd = part.indexOf('\r\n\r\n');
+    if (headerEnd === -1) return null;
+
+    const headers = part.slice(0, headerEnd).toString();
+    const body = part.slice(headerEnd + 4);
+
+    // Trim trailing \r\n before boundary
+    const trimmed = body.slice(0, body.length - 2);
+
+    // Extract filename from Content-Disposition
+    const fnMatch = headers.match(/filename="([^"]+)"/);
+    const filename = fnMatch ? fnMatch[1] : 'paste.png';
+
+    return { filename, data: trimmed };
+}
+
+const server = http.createServer((req, res) => {
+    // CORS for localhost
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(HTML);
+        return;
+    }
+
+    if (req.method === 'POST' && req.url === '/upload') {
+        const chunks = [];
+        req.on('data', (chunk) => chunks.push(chunk));
+        req.on('end', () => {
+            try {
+                const buf = Buffer.concat(chunks);
+                const contentType = req.headers['content-type'] || '';
+                const boundaryMatch = contentType.match(/boundary=(.+)/);
+                if (!boundaryMatch) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'No boundary in content-type' }));
+                    return;
+                }
+
+                const parsed = parseMultipart(buf, boundaryMatch[1]);
+                if (!parsed) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Failed to parse multipart' }));
+                    return;
+                }
+
+                // Generate filename: YYYYMMDD-HHmmss-NNN.ext
+                const now = new Date();
+                const ts = now.toISOString().replace(/[-:T]/g, '').slice(0, 15).replace(/(\d{8})(\d{6})/, '$1-$2');
+                const ext = path.extname(parsed.filename) || '.png';
+                const saveName = ts + '-' + String(Math.floor(Math.random() * 1000)).padStart(3, '0') + ext;
+                const savePath = path.join(SAVE_DIR, saveName);
+
+                fs.writeFileSync(savePath, parsed.data);
+
+                const homePath = savePath.replace(os.homedir(), '~');
+                console.log(`[clipboard] ${homePath} (${(parsed.data.length / 1024).toFixed(1)} KB)`);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ path: savePath, home: homePath, size: parsed.data.length }));
+            } catch (e) {
+                console.error('[clipboard] Upload error:', e.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+
+    // List recent uploads
+    if (req.method === 'GET' && req.url === '/list') {
+        try {
+            const files = fs.readdirSync(SAVE_DIR)
+                .filter(f => /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(f))
+                .sort()
+                .reverse()
+                .slice(0, 20)
+                .map(f => ({
+                    name: f,
+                    path: path.join(SAVE_DIR, f),
+                    home: path.join(SAVE_DIR, f).replace(os.homedir(), '~'),
+                }));
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(files));
+        } catch {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end('[]');
+        }
+        return;
+    }
+
+    res.writeHead(404);
+    res.end('Not found');
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║  AI Workspace Clipboard                                      ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║  Servidor rodando em http://0.0.0.0:${String(PORT).padEnd(25)}║
+║                                                              ║
+║  No PC, abra no browser:                                     ║
+║    http://localhost:${String(PORT).padEnd(40)}║
+║                                                              ║
+║  (requer ai-tunnel ${String(PORT).padEnd(41)}║
+║   ou SSH port-forward ativo)                                 ║
+║                                                              ║
+║  Imagens salvas em: ~/.clipboard/                            ║
+║  Use @path no prompt de qualquer CLI                         ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+`);
+});
