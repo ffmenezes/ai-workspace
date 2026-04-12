@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+cat << 'HELP'
+╔══════════════════════════════════════════════════════════════════════╗
+║  AI Workspace — referência de comandos                               ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+  Coluna "Onde":
+    H   = roda no HOST da VPS (após setup-host-aliases.sh)
+    C   = roda dentro do CONTAINER (após ai-enter)
+    H/C = mesmo nome existe nos dois lugares; o do host só faz
+          docker exec do equivalente interno (use de qualquer um)
+
+  Comando                    Onde   Descrição
+  ────────────────────────── ────── ────────────────────────────────────
+  ai-enter                   H      Shell zsh dentro do container
+  ai-attach                  H      Anexa ao tmux principal (sessão "main")
+  ai-update [imagem]         H      Pull + force update do serviço Swarm
+                                    (AI_WORKSPACE_SERVICE override do nome)
+  ai-version                 H      Mostra versão da imagem em execução + boot log
+  ai-fix-perms               H      Corrige owner em ~/projects (dev:dev)
+  ai-help                    H/C    Esta ajuda
+
+  ai-dev <projeto> [flags]   H/C    Cria/reconecta workspace tmux do projeto
+  ai-dev-danger <projeto>    H/C    Atalho: ai-dev <projeto> --danger
+  ai-sessions                H/C    Lista sessões tmux + processos + recursos
+  ai-kill <projeto>          H/C    Mata uma sessão tmux específica
+  ai-kill-all                H/C    Mata TODAS as sessões (preserva "main")
+
+  ai-setup                   H/C    Define quais agents abrem por padrão
+  ai-setup --reset           H/C    Reseta config e roda wizard de novo
+
+  ralph -a <agent> -p "..."  C      Loop autônomo de um agent até concluir
+  claude / gemini / qwen     C      Invocar uma CLI diretamente
+  cursor / opencode          C      (idem)
+  codex / cline / aider      C      (idem)
+
+  Flags do ai-dev
+  ───────────────
+  (sem flag)         abre os DEFAULTS (configurados via ai-setup)
+  --claude           só Claude
+  --gemini           só Gemini
+  --qwen             só Qwen
+  --cursor           só Cursor
+  --opencode         só OpenCode
+  --codex            só Codex
+  --cline            só Cline
+  --aider            só Aider
+  --all              TODOS os 8 agents (override dos defaults)
+  (combine livre)    --claude --gemini, --qwen --cursor, etc.
+  --rc               adiciona Remote Control no Claude
+  --danger           skip-permissions/yolo nos agents que suportam
+
+  Flags --danger por CLI
+  ──────────────────────
+  claude    --dangerously-skip-permissions
+  gemini    --yolo
+  qwen      --yolo
+  cursor    -f
+  opencode  (sem equivalente — ignorado)
+  codex     --yolo
+  cline     --yolo
+  aider     --yes-always
+
+  Como atualizar as CLIs
+  ──────────────────────
+  Único caminho confiável: rebuild da imagem (push pra GitHub → Actions
+  builda) + ai-update na VPS. Auto-updaters do Claude/Cursor estão
+  bloqueados pelo layout do Dockerfile (binários em /opt read-only).
+  Detalhes em README "Por que rebuild e não auto-update?".
+
+HELP

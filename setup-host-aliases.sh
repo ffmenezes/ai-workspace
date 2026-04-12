@@ -153,7 +153,7 @@ ai-help() {
                                     (AI_WORKSPACE_SERVICE override do nome)
   ai-version                 H      Mostra versão da imagem em execução + boot log
   ai-fix-perms               H      Corrige owner em ~/projects (dev:dev)
-  ai-help                    H      Esta ajuda
+  ai-help                    H/C    Esta ajuda
 
   ai-dev <projeto> [flags]   H/C    Cria/reconecta workspace tmux do projeto
   ai-dev-danger <projeto>    H/C    Atalho: ai-dev <projeto> --danger
