@@ -90,6 +90,12 @@ ai-setup() {
     docker exec -it "$CID" ai-setup "$@"
 }
 
+# Apagar projeto (mata sessão + apaga pasta)
+ai-delete() {
+    local CID; CID=$(_ai_require_container) || return 1
+    docker exec -it "$CID" ai-delete "$1"
+}
+
 # Matar TODAS as sessões tmux de projeto (preserva "main")
 ai-kill-all() {
     local CID; CID=$(_ai_require_container) || return 1
@@ -160,6 +166,7 @@ ai-help() {
   ai-sessions                H/C    Lista sessões tmux + processos + recursos
   ai-kill <projeto>          H/C    Mata uma sessão tmux específica
   ai-kill-all                H/C    Mata TODAS as sessões (preserva "main")
+  ai-delete <projeto>        H/C    Mata sessão + APAGA pasta do projeto
 
   ai-setup                   H/C    Define quais agents abrem por padrão
   ai-setup --reset           H/C    Reseta config e roda wizard de novo

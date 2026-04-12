@@ -1,0 +1,35 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# ai-delete — Encerra sessão tmux e apaga pasta do projeto
+# Uso: ai-delete <nome-do-projeto>
+# ══════════════════════════════════════════════════════════════
+
+PROJECT="${1:?Uso: ai-delete <nome-do-projeto>}"
+PROJECT_DIR="$HOME/projects/$PROJECT"
+
+if [ ! -d "$PROJECT_DIR" ]; then
+    echo "❌ Projeto '$PROJECT' não encontrado em $PROJECT_DIR"
+    exit 1
+fi
+
+echo "⚠️  Isso vai APAGAR permanentemente:"
+echo "   📁 $PROJECT_DIR"
+if tmux has-session -t "$PROJECT" 2>/dev/null; then
+    echo "   🖥️  Sessão tmux '$PROJECT'"
+fi
+echo ""
+read -p "Digite o nome do projeto ($PROJECT) para confirmar: " confirm
+if [ "$confirm" != "$PROJECT" ]; then
+    echo "❌ Nome não confere. Cancelado."
+    exit 0
+fi
+
+# Mata sessão tmux se existir
+if tmux has-session -t "$PROJECT" 2>/dev/null; then
+    tmux kill-session -t "$PROJECT"
+    echo "🗑️  Sessão '$PROJECT' encerrada."
+fi
+
+# Apaga pasta do projeto
+rm -rf "$PROJECT_DIR"
+echo "🗑️  Projeto '$PROJECT' apagado de $PROJECT_DIR"
