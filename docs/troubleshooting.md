@@ -245,6 +245,47 @@ NODE_PATH=/usr/local/lib/node_modules node meu-script.js
 
 ---
 
+## CLI presa no diretório de outro projeto
+
+### Sintoma: Abre `ai-dev projeto-b`, mas a CLI continua operando em `projeto-a`
+
+**Causa**: A CLI já estava rodando numa sessão anterior com `projeto-a`. Ao reconectar ou abrir um novo projeto, o processo da CLI mantém o working directory original — ele não muda de pasta automaticamente.
+
+**Diagnóstico**:
+
+Dentro da janela da CLI, use o comando de shell escape para verificar o diretório atual:
+
+```
+# No Claude Code:
+!pwd
+
+# No Gemini CLI:
+!pwd
+
+# No Aider:
+/run pwd
+```
+
+Se o resultado for `/home/dev/projects/projeto-a` mas você esperava `projeto-b`, é isso.
+
+**Solução**:
+
+1. **Mate a sessão antiga e reabra**:
+   ```bash
+   ai-kill projeto-a
+   ai-dev projeto-b --claude
+   ```
+
+2. **Ou mate todas e comece limpo**:
+   ```bash
+   ai-kill-all
+   ai-dev projeto-b
+   ```
+
+> **Por quê isso acontece?** O `ai-dev` cria a sessão tmux com `cd ~/projects/<projeto>` e lança a CLI nesse diretório. Mas se a sessão já existe (reconexão), ele apenas faz attach — não reinicia as CLIs. O working directory fica travado no que era quando a CLI iniciou.
+
+---
+
 ## Problemas do container
 
 ### Sintoma: Container reinicia em loop

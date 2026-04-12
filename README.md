@@ -1,6 +1,6 @@
 # AI Workspace — Deploy Guide
 
-Setup containerizado de **8 AI coding agents** no Docker Swarm, com persistência em volumes, SSH tunneling e acesso via Termius.
+Setup containerizado de **8 AI coding agents** no Docker Swarm, com persistência em volumes, SSH tunneling e acesso via Termius ou IDE's com SSH.
 
 **Agents**: Claude Code, Gemini CLI, Qwen Code, Cursor CLI, OpenCode CLI, Codex CLI, Cline CLI, Aider
 
@@ -9,28 +9,26 @@ Setup containerizado de **8 AI coding agents** no Docker Swarm, com persistênci
 ## TL;DR
 
 ```bash
-# 1. Na VPS: deploy via Portainer (Stacks → Add Stack → colar aiworkspace.yaml)
-#    Imagem: ghcr.io/ffmenezes/ai-workspace:latest (GitHub Actions → GHCR)
-#    IMPORTANTE: descomente SSH_AUTHORIZED_KEYS no YAML e cole sua chave publica
-#    (cat ~/.ssh/id_ed25519.pub) — garante ai-ssh/ai-tunnel sem setup manual
+# 1. Preparar chave SSH na VPS (necessaria pra ai-ssh e ai-tunnel)
+# So gere se ainda nao tiver uma:
+test -f ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519 -N "" -C "ai-workspace-host"
+# Veja sua chave publica:
+cat ~/.ssh/id_ed25519.pub
+# Copie a saida — vai precisar no proximo passo
 
-# 2. Instalar atalhos no host
+# 2. Deploy no Portainer
+Portainer → Stacks → Add Stack → cole o conteudo de aiworkspace.yaml
+Em SSH_AUTHORIZED_KEYS: descomente a linha e cole a chave publica do passo 1
+Deploy the stack
+
+# 3. Instalar atalhos no host
 curl -fsSL https://raw.githubusercontent.com/ffmenezes/ai-workspace/main/setup-host-aliases.sh | bash && source ~/.bashrc
 
-# 3. Entrar e autenticar (uma vez só)
-ai-enter
-claude /login                   # segue a URL no browser
-gemini --version                # configure GEMINI_API_KEY no aiworkspace.yaml
-qwen                            # Qwen OAuth gratuito (1000 req/dia)
-agent login                     # Cursor OAuth no browser
-opencode auth login             # multi-provider (Anthropic, OpenAI, Google...)
-codex login --device-auth       # OpenAI device auth
-cline auth -p anthropic -k KEY  # provider + API key
-# Aider: configure env vars (ANTHROPIC_API_KEY, etc.) no aiworkspace.yaml ou .env no projeto
-ssh-keygen -t ed25519 -C "ai-workspace"   # adicionar pub key no GitHub
+# 4. Testar acesso ao container
+ai-enter                                   # shell zsh direto — confirma que tudo subiu
 exit
 
-# 4. Usar
+# 5. Usar (cada CLI pede auth na primeira vez)
 ai-dev meu-projeto                         # abre os DEFAULTS (configurados via ai-setup)
 ai-dev meu-projeto --claude                # só Claude
 ai-dev meu-projeto --claude --gemini       # Claude + Gemini

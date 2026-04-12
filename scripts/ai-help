@@ -1,15 +1,9 @@
 #!/usr/bin/env bash
-cat << 'HELP'
-╔══════════════════════════════════════════════════════════════════════╗
-║  AI Workspace — referência de comandos                               ║
-╚══════════════════════════════════════════════════════════════════════╝
+# ai-help [seção] — sem argumento mostra tudo, com argumento filtra
 
-  Coluna "Onde":
-    H   = roda no HOST da VPS (após setup-host-aliases.sh)
-    C   = roda dentro do CONTAINER (após ai-enter)
-    H/C = mesmo nome existe nos dois lugares; o do host só faz
-          docker exec do equivalente interno (use de qualquer um)
+declare -A SECTIONS
 
+SECTIONS[comandos]='
   Comando                    Onde   Descrição
   ────────────────────────── ────── ────────────────────────────────────
   ai-enter                   H      Shell zsh dentro do container
@@ -23,7 +17,7 @@ cat << 'HELP'
   ai-clipboard [porta]       H      Clipboard bridge: cola imagens via browser
                                     (default porta 3456, abre tunnel automaticamente)
   ai-browser [porta|status|stop] C  Chromium headless com CDP (default porta 9222)
-  ai-help                    H/C    Esta ajuda
+  ai-help [seção]            H/C    Esta ajuda (seções: comandos flags danger setup docs)
 
   ai-dev <projeto> [flags]   H/C    Cria/reconecta workspace tmux do projeto
   ai-dev-danger <projeto>    H/C    Atalho: ai-dev <projeto> --danger
@@ -40,6 +34,9 @@ cat << 'HELP'
   cursor / opencode          C      (idem)
   codex / cline / aider      C      (idem)
 
+  Onde: H = host da VPS    C = container    H/C = ambos'
+
+SECTIONS[flags]='
   Flags do ai-dev
   ───────────────
   (sem flag)         abre os DEFAULTS (configurados via ai-setup)
@@ -56,8 +53,9 @@ cat << 'HELP'
   --rc               adiciona Remote Control no Claude
   --danger           skip-permissions/yolo nos agents que suportam
   --clipboard        inicia clipboard bridge (cola imagens via browser)
-  --browser          inicia Chromium headless com CDP (DevTools remoto)
+  --browser          inicia Chromium headless com CDP (DevTools remoto)'
 
+SECTIONS[danger]='
   Flags --danger por CLI
   ──────────────────────
   claude    --dangerously-skip-permissions
@@ -67,17 +65,11 @@ cat << 'HELP'
   opencode  (sem equivalente — ignorado)
   codex     --yolo
   cline     --yolo
-  aider     --yes-always
+  aider     --yes-always'
 
-  Como atualizar as CLIs
-  ──────────────────────
-  Único caminho confiável: rebuild da imagem (push pra GitHub → Actions
-  builda) + ai-update na VPS. Auto-updaters do Claude/Cursor estão
-  bloqueados pelo layout do Dockerfile (binários em /opt read-only).
-
-╔══════════════════════════════════════════════════════════════════════╗
-║  Primeiro acesso — setup rápido                                      ║
-╚══════════════════════════════════════════════════════════════════════╝
+SECTIONS[setup]='
+  Primeiro acesso — setup rápido
+  ══════════════════════════════
 
   1. SSH (escolha uma opção)
   ─────────────────────────
@@ -99,7 +91,7 @@ cat << 'HELP'
     claude /login                     # browser OAuth (Pro/Max)
     gemini --version                  # GEMINI_API_KEY no aiworkspace.yaml
     qwen                              # Qwen OAuth gratuito
-    agent login                       # Cursor OAuth
+    cursor login                       # Cursor OAuth
     opencode auth login               # multi-provider
     codex login --device-auth         # OpenAI device auth
     cline auth -p anthropic -k KEY    # provider + API key
@@ -120,8 +112,9 @@ cat << 'HELP'
   No host:     ai-tunnel 3456 9222    # tunnel das duas portas
   No PC:       ssh -L 13456:localhost:3456 -L 19222:localhost:9222 root@<vps>
   Browser PC:  http://localhost:13456           → Ctrl+V cola imagem
-  Chrome PC:   chrome://inspect → localhost:19222 → DevTools remoto
+  Chrome PC:   chrome://inspect → localhost:19222 → DevTools remoto'
 
+SECTIONS[docs]='
   Documentação completa
   ─────────────────────
   Dentro do container:  ls ~/docs/
@@ -130,4 +123,39 @@ cat << 'HELP'
     cdp-live-debugging.md   → Chrome DevTools remoto passo a passo
     troubleshooting.md      → diagnóstico de problemas comuns
 
-HELP
+  Como atualizar as CLIs
+  ──────────────────────
+  Único caminho confiável: rebuild da imagem (push pra GitHub → Actions
+  builda) + ai-update na VPS. Auto-updaters do Claude/Cursor estão
+  bloqueados pelo layout do Dockerfile (binários em /opt read-only).'
+
+SECTION_ORDER=(comandos flags danger setup docs)
+
+print_header() {
+  echo '╔══════════════════════════════════════════════════════════════════════╗'
+  echo '║  AI Workspace — referência de comandos                               ║'
+  echo '╚══════════════════════════════════════════════════════════════════════╝'
+}
+
+print_section() {
+  echo "${SECTIONS[$1]}"
+  echo
+}
+
+if [[ $# -eq 0 ]]; then
+  print_header
+  for s in "${SECTION_ORDER[@]}"; do
+    print_section "$s"
+  done
+  exit 0
+fi
+
+key="${1,,}"  # lowercase
+
+if [[ -n "${SECTIONS[$key]+x}" ]]; then
+  print_section "$key"
+else
+  echo "Seção '$1' não encontrada."
+  echo "Seções disponíveis: ${SECTION_ORDER[*]}"
+  exit 1
+fi

@@ -194,8 +194,8 @@ WORKDIR /home/dev
 # ── Starship preset ──
 RUN mkdir -p /home/dev/.config \
     && starship preset gruvbox-rainbow -o /home/dev/.config/starship.toml \
-    && echo -e '\n[container]\ndisabled = true' >> /home/dev/.config/starship.toml \
-    && echo -e '\n[gcloud]\ndisabled = true' >> /home/dev/.config/starship.toml
+    && printf '\n[container]\ndisabled = true\n' >> /home/dev/.config/starship.toml \
+    && printf '\n[gcloud]\ndisabled = true\n' >> /home/dev/.config/starship.toml
 
 # ── tmux ──
 COPY --chown=dev:dev tmux.conf /home/dev/.tmux.conf
