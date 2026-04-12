@@ -1,0 +1,118 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# ai-browser — Chromium headless com CDP para AI Workspace
+#
+# Inicia um Chromium com remote-debugging-port acessível via
+# tunnel SSH. Idempotente: se já estiver rodando, não faz nada.
+#
+# Uso:
+#   ai-browser              → inicia na porta 9222 (default)
+#   ai-browser 9333         → porta customizada
+#   ai-browser stop          → mata o Chromium CDP
+#   ai-browser status        → verifica se está rodando
+#
+# O Chromium fica disponível para:
+#   • chrome://inspect no PC (via tunnel) — interação bidirecional
+#   • Playwright connectOverCDP() — automação por agents
+#   • agent-browser — CLI de browser automation
+# ══════════════════════════════════════════════════════════════
+set -e
+
+CDP_PORT="${1:-9222}"
+PIDFILE="$HOME/.ai-browser.pid"
+
+# ── Encontrar Chromium do Playwright ──
+find_chromium() {
+    find /opt/ms-playwright -name "chrome" -type f 2>/dev/null | head -1
+}
+
+# ── Checar se já está rodando ──
+is_running() {
+    if [ -f "$PIDFILE" ]; then
+        local pid
+        pid=$(cat "$PIDFILE")
+        if kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+        rm -f "$PIDFILE"
+    fi
+    return 1
+}
+
+# ── Checar se CDP responde ──
+is_healthy() {
+    curl -sf "http://localhost:$CDP_PORT/json/version" >/dev/null 2>&1
+}
+
+case "$1" in
+    stop)
+        if is_running; then
+            kill "$(cat "$PIDFILE")" 2>/dev/null || true
+            rm -f "$PIDFILE"
+            echo "Chromium CDP parado"
+        else
+            echo "Chromium CDP não está rodando"
+        fi
+        exit 0
+        ;;
+    status)
+        if is_running && is_healthy; then
+            echo "Chromium CDP rodando (PID $(cat "$PIDFILE"), porta $CDP_PORT)"
+            curl -sf "http://localhost:$CDP_PORT/json/version" | jq -r '.Browser' 2>/dev/null || true
+        elif is_running; then
+            echo "Chromium CDP rodando (PID $(cat "$PIDFILE")) mas não responde na porta $CDP_PORT"
+        else
+            echo "Chromium CDP não está rodando"
+        fi
+        exit 0
+        ;;
+esac
+
+# ── Já rodando? ──
+if is_running && is_healthy; then
+    echo "Chromium CDP já ativo (PID $(cat "$PIDFILE"), porta $CDP_PORT)"
+    exit 0
+fi
+
+# ── Limpar processo morto ──
+if is_running; then
+    kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    rm -f "$PIDFILE"
+    sleep 1
+fi
+
+# ── Encontrar binário ──
+CHROME=$(find_chromium)
+if [ -z "$CHROME" ]; then
+    echo "Chromium não encontrado em /opt/ms-playwright" >&2
+    exit 1
+fi
+
+# ── Lançar Chromium ──
+"$CHROME" \
+    --remote-debugging-port="$CDP_PORT" \
+    --remote-debugging-address=0.0.0.0 \
+    --headless=new \
+    --no-sandbox \
+    --disable-gpu \
+    --disable-dev-shm-usage \
+    --disable-software-rasterizer \
+    --disable-extensions \
+    --no-first-run \
+    --no-default-browser-check \
+    about:blank \
+    >/dev/null 2>&1 &
+
+echo $! > "$PIDFILE"
+
+# ── Esperar CDP ficar pronto ──
+for i in $(seq 1 30); do
+    if is_healthy; then
+        echo "Chromium CDP ativo (PID $(cat "$PIDFILE"), porta $CDP_PORT)"
+        exit 0
+    fi
+    sleep 0.5
+done
+
+echo "Chromium iniciou mas CDP não respondeu em 15s" >&2
+exit 1
