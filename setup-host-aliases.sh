@@ -43,51 +43,51 @@ _ai_require_container() {
 # Entrar no container (shell zsh interativo)
 ai-enter() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec -it "$CID" zsh -l
+    docker exec -it -u dev "$CID" zsh -l
 }
 
 # Anexar ao tmux principal do container
 ai-attach() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec -it "$CID" tmux attach -t main 2>/dev/null \
-        || docker exec -it "$CID" zsh -l
+    docker exec -it -u dev "$CID" tmux attach -t main 2>/dev/null \
+        || docker exec -it -u dev "$CID" zsh -l
 }
 
 # Criar/reconectar workspace tmux de um projeto
 # Uso: ai-dev <projeto> [--claude] [--gemini] [--qwen] [--cursor] [--opencode] [--codex] [--cline] [--aider] [--rc] [--danger]
 ai-dev() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec -it "$CID" zsh -lc "ai-dev $*"
+    docker exec -it -u dev "$CID" zsh -lc "ai-dev $*"
 }
 
 # Atalho: workspace com todos os agents em modo danger
 ai-dev-danger() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec -it "$CID" zsh -lc "ai-dev $1 --danger"
+    docker exec -it -u dev "$CID" zsh -lc "ai-dev $1 --danger"
 }
 
 # Mostrar versão da imagem rodando no container
 ai-version() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec "$CID" bash -c 'echo "version: $AI_WORKSPACE_VERSION"; echo "commit:  $AI_WORKSPACE_COMMIT"; echo "built:   $AI_WORKSPACE_BUILD_DATE"; echo ""; echo "Boot log (últimas 5 entradas):"; tail -5 /home/dev/.ai-workspace.log 2>/dev/null || echo "(sem log)"'
+    docker exec -u dev "$CID" bash -c 'echo "version: $AI_WORKSPACE_VERSION"; echo "commit:  $AI_WORKSPACE_COMMIT"; echo "built:   $AI_WORKSPACE_BUILD_DATE"; echo ""; echo "Boot log (últimas 5 entradas):"; tail -5 /home/dev/.ai-workspace.log 2>/dev/null || echo "(sem log)"'
 }
 
 # Listar sessões tmux ativas no container
 ai-sessions() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec -it "$CID" ai-sessions
+    docker exec -it -u dev "$CID" ai-sessions
 }
 
 # Matar uma sessão tmux específica
 ai-kill() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec -it "$CID" ai-kill "$1"
+    docker exec -it -u dev "$CID" ai-kill "$1"
 }
 
 # Configurar defaults do ai-dev (quais agents abrem por padrão)
 ai-setup() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec -it "$CID" ai-setup "$@"
+    docker exec -it -u dev "$CID" ai-setup "$@"
 }
 
 # Apagar projeto (mata sessão + apaga pasta)
@@ -97,13 +97,13 @@ ai-delete() {
     local PROJECT="$1"
     [ -z "$PROJECT" ] && { echo "Uso: ai-delete <nome-do-projeto>"; return 1; }
     docker exec -u root "$CID" chown -R dev:dev "/home/dev/projects/$PROJECT" 2>/dev/null
-    docker exec -it "$CID" ai-delete "$PROJECT"
+    docker exec -it -u dev "$CID" ai-delete "$PROJECT"
 }
 
 # Matar TODAS as sessões tmux de projeto (preserva "main")
 ai-kill-all() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec -it "$CID" ai-kill-all
+    docker exec -it -u dev "$CID" ai-kill-all
 }
 
 # Corrigir permissões em ~/projects (após upload via Portainer/SCP)
