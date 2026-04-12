@@ -24,13 +24,20 @@ services:
     environment:
       - TERM=xterm-256color
       - LANG=C.UTF-8
-      # ── Auth de CLIs (descomente e preencha o que usar) ──
+
+      # ── SSH (chave pública do host, injetada no boot) ──
+      # Descomente e cole a chave pública do host da VPS
+      # Execute: cat ~/.ssh/id_ed25519.pub
+      # Isso garante que ai-ssh/ai-tunnel funcionem mesmo após rebuild da imagem.
+      # - SSH_AUTHORIZED_KEYS=ssh-ed25519 AAAA... root@vps
+      #
+      # OPCIONAL - ao executar cada CLI consegue autenticar via oauth
       # - GEMINI_API_KEY=
       # - CURSOR_API_KEY=
-      # Qwen com API key (alternativa ao OAuth):
-      # - OPENAI_API_KEY=
-      # - OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-      # - OPENAI_MODEL=qwen3-coder-plus
+      # - OPENCODE_API_KEY=
+      # - CODEX_API_KEY=
+      # - CLINE_API_KEY=
+      # - AIDER_API_KEY=
 
     volumes:
       - aiworkspace_projects:/home/dev/projects

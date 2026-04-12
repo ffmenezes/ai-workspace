@@ -39,8 +39,34 @@ for skill in /opt/default-skills/*/; do
 done
 
 # ── 4. SSH server ──
-# Gera host keys se não existirem (efêmeras — regeneradas a cada rebuild)
-ssh-keygen -A 2>/dev/null
+
+# Host keys persistentes: salva no volume ~/.ssh/.host_keys/ para que
+# não mudem entre rebuilds (evita "host key changed" no cliente SSH).
+HOST_KEYS_DIR="/home/dev/.ssh/.host_keys"
+mkdir -p "$HOST_KEYS_DIR"
+if [ -z "$(ls -A "$HOST_KEYS_DIR" 2>/dev/null)" ]; then
+    # Primeiro boot: gera e salva no volume
+    ssh-keygen -A 2>/dev/null
+    cp /etc/ssh/ssh_host_* "$HOST_KEYS_DIR/"
+    log "SSH host keys generated and saved to volume"
+else
+    # Boot seguinte: restaura do volume
+    cp "$HOST_KEYS_DIR"/ssh_host_* /etc/ssh/
+    log "SSH host keys restored from volume"
+fi
+
+# Injetar authorized_keys via env var (se definida no stack)
+# Permite setup automático sem docker exec manual.
+if [ -n "$SSH_AUTHORIZED_KEYS" ]; then
+    mkdir -p /home/dev/.ssh
+    # Append sem duplicar: só adiciona se a chave ainda não está presente
+    touch /home/dev/.ssh/authorized_keys
+    while IFS= read -r key; do
+        [ -z "$key" ] && continue
+        grep -qF "$key" /home/dev/.ssh/authorized_keys 2>/dev/null || echo "$key" >> /home/dev/.ssh/authorized_keys
+    done <<< "$SSH_AUTHORIZED_KEYS"
+    log "SSH authorized_keys injected from environment"
+fi
 
 # Fixa permissões (sshd é strict)
 mkdir -p /run/sshd
