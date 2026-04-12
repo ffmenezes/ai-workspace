@@ -27,6 +27,7 @@ Infra-as-code for a containerized multi-agent dev environment built around eight
   - Codex CLI — `npm i -g @openai/codex`; auth in `~/.codex/auth.json` via `codex login --device-auth` or API key in config.toml (volume `aiworkspace_codex`). Credential store set to `file` (no keyring in Docker).
   - Cline CLI — `npm i -g cline`; auth via `cline auth -p <provider> -k <key>` (volume `aiworkspace_cline`).
   - Aider — `uv tool install aider-chat`; auth via env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) or `.env` file in project. Config in `~/.aider*` (volume `aiworkspace_aider`).
+- **Browser automation**: `agent-browser` (Vercel Labs) — `npm i -g agent-browser`; native Rust CLI that controls Chrome/Chromium via CDP. Auto-detects Playwright's Chromium in `/opt/ms-playwright` and supports Lightpanda as alternative engine (`--engine lightpanda`). Installed globally, not an AI CLI — it's a tool the agents use. SKILL.md is a default global skill seeded into `~/.agents/skills/agent-browser/` on first boot from `/opt/default-skills/`.
   **Update story**: Claude and Cursor have native auto-updaters that are *intentionally bypassed* — both binaries are copied to `/opt/{claude,cursor-agent}` (read-only) and symlinked into PATH. Auto-updates download to `~/.local/share/...` but the symlink keeps pointing at the build-time version, so they never run. The only reliable update path for any CLI is image rebuild + `ai-update`. Gemini/Qwen/OpenCode can be updated pontually via `npm update -g ...` inside the container, but those changes vanish on rebuild. When changing how a CLI is installed, updated, or authenticated, update Dockerfile + aiworkspace.yaml + README in lockstep.
 - **Container user**: runs as non-root `dev`. No sudo inside. To install packages at runtime, use `docker exec -u root` from the host (see README "Manutenção"); persistent additions belong in the Dockerfile.
 - **Persistence** is entirely in named Docker volumes mounted into `/home/dev`:
@@ -65,6 +66,13 @@ When changing agent invocation, flags, or window layout, edit `scripts/ai-dev` a
 - Generates thin-wrapper instruction files (`CLAUDE.md`, `GEMINI.md`, `QWEN.md`, `AGENTS.md`, `.clinerules`, `.cursor/rules/base.mdc`, `CONVENTIONS.md`) pointing to `AGENTS.md` as the shared source of truth. Never overwrites existing files.
 
 Skills created by any CLI (e.g. Claude writing to `.claude/skills/new-skill/`) transparently land in `.agents/skills/` thanks to the directory symlink — all CLIs see it immediately.
+
+## Default Skills
+
+Skills in the repo's `.agents/skills/` directory are baked into the image at `/opt/default-skills/`. On container boot, any skill not already present in the `~/.agents/skills/` volume is copied (seeded) automatically. This means:
+- New default skills added to the repo appear in the container after rebuild + `ai-update` (next boot).
+- User modifications to skills in the volume are never overwritten (seed only copies if the skill directory doesn't exist).
+- Current default skills: `agent-browser` (browser automation via CDP), `ralph-prompt` (prompt engineering for ralph loops).
 
 ## Ralph loop
 

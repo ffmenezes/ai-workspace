@@ -87,6 +87,11 @@ RUN npm install -g playwright \
     && chmod -R a+rX /opt/ms-playwright
 ENV PLAYWRIGHT_BROWSERS_PATH="/opt/ms-playwright"
 
+# ── agent-browser (CLI de browser automation para AI agents) ──
+# Usa Chromium do Playwright (auto-detect) + Lightpanda como engine alternativo.
+# Skill SKILL.md incluída em /opt/default-skills/ e seeded no boot.
+RUN npm install -g agent-browser
+
 # ══════════════════════════════════════════════════════════════
 # LAYER 4: User, configs e scripts (muda às vezes)
 # ══════════════════════════════════════════════════════════════
@@ -136,7 +141,7 @@ RUN npm install -g @openai/codex
 RUN npm install -g cline
 
 # ── Aider (Python — instala via uv que já está no PATH do root) ──
-RUN /root/.cargo/bin/uv tool install aider-chat
+RUN /root/.local/bin/uv tool install aider-chat
 
 # ══════════════════════════════════════════════════════════════
 # LAYER 6: Fix permissões (depende das CLIs acima)
@@ -201,6 +206,9 @@ COPY --chown=dev:dev zshrc /home/dev/.zshrc
 COPY --chown=dev:dev bashrc.append /tmp/bashrc.append
 RUN cat /tmp/bashrc.append >> /home/dev/.bashrc && rm /tmp/bashrc.append
 
+# ── Default skills (baked na imagem, seeded no volume no boot) ──
+COPY --chown=dev:dev .agents/skills/ /opt/default-skills/
+
 # ══════════════════════════════════════════════════════════════
 # Version metadata (injetado pelo CI)
 # ══════════════════════════════════════════════════════════════
@@ -231,4 +239,4 @@ ENV STARSHIP_CONFIG="/home/dev/.config/starship.toml"
 # Boot log: registra versão + timestamp no startup do container.
 # Surface via `docker logs <container>` (stdout) e via arquivo persistente
 # em /home/dev/.ai-workspace.log (writable pelo user dev).
-CMD ["bash", "-c", "echo \"[$(date -Iseconds)] AI Workspace started — version=${AI_WORKSPACE_VERSION} commit=${AI_WORKSPACE_COMMIT} build_date=${AI_WORKSPACE_BUILD_DATE}\" | tee -a /home/dev/.ai-workspace.log; if [ ! -f /home/dev/.claude.json ]; then LATEST=$(ls -t /home/dev/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1); if [ -n \"$LATEST\" ]; then cp \"$LATEST\" /home/dev/.claude.json && echo \"[$(date -Iseconds)] Restored ~/.claude.json from $LATEST\" | tee -a /home/dev/.ai-workspace.log; fi; fi; tmux new-session -d -s main && tail -f /home/dev/.ai-workspace.log"]
+CMD ["bash", "-c", "echo \"[$(date -Iseconds)] AI Workspace started — version=${AI_WORKSPACE_VERSION} commit=${AI_WORKSPACE_COMMIT} build_date=${AI_WORKSPACE_BUILD_DATE}\" | tee -a /home/dev/.ai-workspace.log; if [ ! -f /home/dev/.claude.json ]; then LATEST=$(ls -t /home/dev/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1); if [ -n \"$LATEST\" ]; then cp \"$LATEST\" /home/dev/.claude.json && echo \"[$(date -Iseconds)] Restored ~/.claude.json from $LATEST\" | tee -a /home/dev/.ai-workspace.log; fi; fi; mkdir -p /home/dev/.agents/skills; for skill in /opt/default-skills/*/; do name=$(basename \"$skill\"); if [ ! -d \"/home/dev/.agents/skills/$name\" ]; then cp -r \"$skill\" \"/home/dev/.agents/skills/$name\" && echo \"[$(date -Iseconds)] Seeded default skill: $name\" | tee -a /home/dev/.ai-workspace.log; fi; done; tmux new-session -d -s main && tail -f /home/dev/.ai-workspace.log"]
