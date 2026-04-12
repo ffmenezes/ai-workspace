@@ -44,6 +44,23 @@ ai-help                                    # lista todos os comandos
 # Ctrl+B d          → sair sem matar
 ```
 
+### TL;DR — Clipboard + Browser (tunnel completo)
+
+```bash
+# ── VPS host (terminal 1) — criar workspace ──
+ai-dev meu-projeto --clipboard --browser
+
+# ── VPS host (terminal 2) — abrir tunnels pro container ──
+ai-tunnel 3456 9222
+
+# ── PC local — tunnel ate a VPS ──
+ssh -L 13456:localhost:3456 -L 19222:localhost:9222 root@<ip-vps>
+
+# ── PC local — usar ──
+# Clipboard:  http://localhost:13456        → Ctrl+V cola imagem
+# DevTools:   chrome://inspect → Configure  → localhost:19222 → Inspect
+```
+
 ---
 
 ## Por que esse modelo?

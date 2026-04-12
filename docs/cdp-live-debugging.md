@@ -11,6 +11,25 @@ Qualquer ação feita no DevTools é executada no Chromium remoto. Os AI agents 
 
 ---
 
+## TL;DR — Tunnel completo (clipboard + DevTools)
+
+```bash
+# ── VPS host (terminal 1) — criar workspace ──
+ai-dev meu-projeto --claude --clipboard --browser
+
+# ── VPS host (terminal 2) — abrir tunnels pro container ──
+ai-tunnel 3456 9222
+
+# ── PC local — tunnel até a VPS ──
+ssh -L 13456:localhost:3456 -L 19222:localhost:9222 root@<ip-vps>
+
+# ── PC local — usar ──
+# Clipboard:  http://localhost:13456        → Ctrl+V cola imagem
+# DevTools:   chrome://inspect → Configure  → localhost:19222 → Inspect
+```
+
+---
+
 ## Modo rápido (recomendado): ai-dev --browser
 
 ```bash
