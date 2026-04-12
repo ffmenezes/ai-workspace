@@ -1,13 +1,16 @@
 #!/bin/bash
 # ══════════════════════════════════════════════════════════════
-# ai-setup — Define quais agents abrem por padrão no ai-dev
+# ai-setup — Define quais agents e serviços abrem por padrão no ai-dev
 #
 # Uso:
 #   ai-setup              → wizard interativo
 #   ai-setup --reset      → apaga config e roda wizard de novo
 #
 # Config salva em: ~/.config/ai-workspace/defaults.conf
-# Formato: DEFAULT_AGENTS="claude gemini aider" (espaço-separado)
+# Formato:
+#   DEFAULT_AGENTS="claude gemini aider" (espaço-separado)
+#   DEFAULT_CLIPBOARD=true|false
+#   DEFAULT_BROWSER=true|false
 # ══════════════════════════════════════════════════════════════
 set -e
 
@@ -74,14 +77,57 @@ if [ ${#SELECTED[@]} -eq 0 ]; then
     exit 1
 fi
 
-# Salvar
-echo "DEFAULT_AGENTS=\"${SELECTED[*]}\"" > "$CONFIG_FILE"
+# ── Serviços opcionais ──
+echo ""
+echo "══════════════════════════════════════"
+echo ""
+echo "Serviços opcionais:"
+echo ""
+
+# Clipboard
+echo "  Clipboard bridge — cola imagens do PC via browser"
+echo "  (servidor web em :3456, requer ai-tunnel)"
+read -rp "  Ativar clipboard-server? [s/N]: " CLIP_CHOICE
+case "$CLIP_CHOICE" in
+    s|S|sim|y|Y|yes) DEFAULT_CLIPBOARD=true ;;
+    *) DEFAULT_CLIPBOARD=false ;;
+esac
 
 echo ""
-echo "✅ Defaults salvos: ${SELECTED[*]}"
-echo "   Config: $CONFIG_FILE"
+
+# Browser CDP
+echo "  Chromium CDP — browser compartilhado com DevTools remoto"
+echo "  (headless em :9222, dev e agents veem as mesmas abas)"
+read -rp "  Ativar browser CDP? [s/N]: " BROWSER_CHOICE
+case "$BROWSER_CHOICE" in
+    s|S|sim|y|Y|yes) DEFAULT_BROWSER=true ;;
+    *) DEFAULT_BROWSER=false ;;
+esac
+
+# Salvar
+cat > "$CONFIG_FILE" << CONF
+DEFAULT_AGENTS="${SELECTED[*]}"
+DEFAULT_CLIPBOARD=$DEFAULT_CLIPBOARD
+DEFAULT_BROWSER=$DEFAULT_BROWSER
+CONF
+
 echo ""
-echo "   ai-dev <projeto>          → abre: ${SELECTED[*]}"
-echo "   ai-dev <projeto> --claude → override: só claude"
-echo "   ai-dev <projeto> --all    → override: todos os 8"
+echo "✅ Defaults salvos:"
+echo "   Agents:    ${SELECTED[*]}"
+echo "   Clipboard: $DEFAULT_CLIPBOARD"
+echo "   Browser:   $DEFAULT_BROWSER"
+echo "   Config:    $CONFIG_FILE"
 echo ""
+echo "   ai-dev <projeto>              → abre defaults"
+echo "   ai-dev <projeto> --claude     → override: só claude"
+echo "   ai-dev <projeto> --all        → override: todos os 8"
+echo "   ai-dev <projeto> --clipboard  → override: ativa clipboard"
+echo "   ai-dev <projeto> --browser    → override: ativa browser"
+echo ""
+if $DEFAULT_CLIPBOARD || $DEFAULT_BROWSER; then
+    PORTS=""
+    $DEFAULT_CLIPBOARD && PORTS="3456"
+    $DEFAULT_BROWSER && PORTS="${PORTS:+$PORTS }9222"
+    echo "   Lembre de rodar no host: ai-tunnel $PORTS"
+    echo ""
+fi

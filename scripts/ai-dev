@@ -10,12 +10,14 @@
 #   ai-dev <projeto> --codex --aider     → Codex + Aider
 #   ai-dev <projeto> --rc                → adiciona Remote Control no Claude
 #   ai-dev <projeto> --danger            → skip-permissions/yolo nos agents que suportam
+#   ai-dev <projeto> --clipboard         → inicia clipboard bridge (cola imagens via browser)
+#   ai-dev <projeto> --browser           → inicia Chromium headless com CDP (DevTools remoto)
 #
 # Regras:
 #   • Sem nenhuma flag de agent → abre os DEFAULTS (configurados via ai-setup)
 #   • Com qualquer flag de agent → abre SOMENTE os nomeados
 #   • --all abre TODOS os 8 agents (override dos defaults)
-#   • --rc e --danger são flags modificadoras (não contam como "agent flag")
+#   • --rc, --danger, --clipboard, --browser são flags modificadoras (não contam como "agent flag")
 #
 # Flags de prompt one-shot (referência — usadas pelo ralph, não pelo ai-dev):
 #   claude   -p "prompt"                  (--print)
@@ -39,12 +41,14 @@
 # ══════════════════════════════════════════════════════════════
 set -e
 
-PROJECT="${1:?Uso: ai-dev <projeto> [--claude] [--gemini] [--qwen] [--cursor] [--opencode] [--codex] [--cline] [--aider] [--all] [--rc] [--danger]}"
+PROJECT="${1:?Uso: ai-dev <projeto> [--claude] [--gemini] [--qwen] [--cursor] [--opencode] [--codex] [--cline] [--aider] [--all] [--rc] [--danger] [--clipboard] [--browser]}"
 shift
 
 # ── Parsear flags ──
 RC=false
 DANGER=false
+CLIPBOARD=false
+BROWSER=false
 CLAUDE=false
 GEMINI=false
 QWEN=false
@@ -57,8 +61,10 @@ ANY_AGENT=false
 
 for flag in "$@"; do
     case "$flag" in
-        --rc)       RC=true ;;
-        --danger)   DANGER=true ;;
+        --rc)        RC=true ;;
+        --danger)    DANGER=true ;;
+        --clipboard) CLIPBOARD=true ;;
+        --browser)   BROWSER=true ;;
         --claude)   CLAUDE=true;   ANY_AGENT=true ;;
         --gemini)   GEMINI=true;   ANY_AGENT=true ;;
         --qwen)     QWEN=true;     ANY_AGENT=true ;;
@@ -74,9 +80,10 @@ for flag in "$@"; do
     esac
 done
 
-# ── Padrão: se nenhum agent foi nomeado, usar defaults ──
-if ! $ANY_AGENT; then
-    CONFIG_FILE="$HOME/.config/ai-workspace/defaults.conf"
+# ── Carregar config (agents, clipboard, browser) ──
+CONFIG_FILE="$HOME/.config/ai-workspace/defaults.conf"
+
+_load_config() {
     if [ -f "$CONFIG_FILE" ]; then
         source "$CONFIG_FILE"
         for agent in $DEFAULT_AGENTS; do
@@ -91,32 +98,29 @@ if ! $ANY_AGENT; then
                 aider)    AIDER=true ;;
             esac
         done
-    else
+        # Serviços: só aplica default se flag não foi passada explicitamente
+        $CLIPBOARD || CLIPBOARD="${DEFAULT_CLIPBOARD:-false}"
+        $BROWSER   || BROWSER="${DEFAULT_BROWSER:-false}"
+        return 0
+    fi
+    return 1
+}
+
+if ! $ANY_AGENT; then
+    if ! _load_config; then
         # Primeiro uso: rodar wizard
         echo "⚙️  Primeira execução — configurando defaults..."
         echo ""
         ai-setup
-        # Recarregar config após wizard
-        if [ -f "$CONFIG_FILE" ]; then
-            source "$CONFIG_FILE"
-            for agent in $DEFAULT_AGENTS; do
-                case "$agent" in
-                    claude)   CLAUDE=true ;;
-                    gemini)   GEMINI=true ;;
-                    qwen)     QWEN=true ;;
-                    cursor)   CURSOR=true ;;
-                    opencode) OPENCODE=true ;;
-                    codex)    CODEX=true ;;
-                    cline)    CLINE=true ;;
-                    aider)    AIDER=true ;;
-                esac
-            done
-        else
+        if ! _load_config; then
             # Fallback se wizard cancelou: abre todos
             CLAUDE=true; GEMINI=true; QWEN=true; CURSOR=true
             OPENCODE=true; CODEX=true; CLINE=true; AIDER=true
         fi
     fi
+else
+    # Agent flags explícitas, mas ainda carregar defaults de serviços
+    _load_config 2>/dev/null || true
 fi
 
 DIR="$HOME/projects/$PROJECT"
@@ -198,6 +202,25 @@ fi
 # ── Focar na primeira window ──
 tmux select-window -t "$PROJECT":1
 
+# ── Serviços opcionais (clipboard + browser) ──
+TUNNEL_PORTS=""
+
+if $CLIPBOARD; then
+    CLIP_PORT=3456
+    if ! ss -tlnp 2>/dev/null | grep -q ":$CLIP_PORT "; then
+        node "$HOME/bin/ai-clipboard" "$CLIP_PORT" &
+        disown
+        sleep 1
+    fi
+    TUNNEL_PORTS="$CLIP_PORT"
+fi
+
+if $BROWSER; then
+    CDP_PORT=9222
+    "$HOME/bin/ai-browser" "$CDP_PORT"
+    TUNNEL_PORTS="${TUNNEL_PORTS:+$TUNNEL_PORTS }$CDP_PORT"
+fi
+
 # ── Info ──
 AGENTS=""
 $CLAUDE   && AGENTS="${AGENTS}${AGENTS:+ + }claude"
@@ -209,7 +232,19 @@ $CODEX   && AGENTS="${AGENTS}${AGENTS:+ + }codex"
 $CLINE   && AGENTS="${AGENTS}${AGENTS:+ + }cline"
 $AIDER   && AGENTS="${AGENTS}${AGENTS:+ + }aider"
 echo "   Agents: ${AGENTS:-shell only}"
-$DANGER && echo "⚠️  Modo DANGER ativo"
+$DANGER && echo "   Modo DANGER ativo"
+$CLIPBOARD && echo "   Clipboard bridge ativo (:$CLIP_PORT)"
+$BROWSER && echo "   Chromium CDP ativo (:$CDP_PORT)"
+
+if [ -n "$TUNNEL_PORTS" ]; then
+    echo ""
+    echo "   Para acessar do PC, rode no host da VPS:"
+    echo "     ai-tunnel $TUNNEL_PORTS"
+    echo ""
+    $CLIPBOARD && echo "   Browser: http://localhost:$CLIP_PORT (clipboard)"
+    $BROWSER   && echo "   Chrome:  chrome://inspect → localhost:$CDP_PORT (DevTools)"
+    echo ""
+fi
 
 # ── Attach ──
 tmux attach -t "$PROJECT"

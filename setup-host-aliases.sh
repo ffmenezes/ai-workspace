@@ -54,7 +54,7 @@ ai-attach() {
 }
 
 # Criar/reconectar workspace tmux de um projeto
-# Uso: ai-dev <projeto> [--claude] [--gemini] [--qwen] [--cursor] [--opencode] [--codex] [--cline] [--aider] [--rc] [--danger]
+# Uso: ai-dev <projeto> [--claude] [--gemini] [--qwen] [--cursor] [--opencode] [--codex] [--cline] [--aider] [--rc] [--danger] [--clipboard] [--browser]
 ai-dev() {
     local CID; CID=$(_ai_require_container) || return 1
     docker exec -it -u dev "$CID" zsh -lc "ai-dev $*"
@@ -147,6 +147,33 @@ ai-ssh() {
     ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 dev@localhost "$@"
 }
 
+# Clipboard bridge: inicia servidor web no container + abre tunnel
+# Uso: ai-clipboard [porta]    (default: 3456)
+# No PC, abre http://localhost:<porta> para colar imagens via Ctrl+V
+ai-clipboard() {
+    local CID; CID=$(_ai_require_container) || return 1
+    local PORT="${1:-3456}"
+
+    # Checar se já tem servidor rodando nessa porta
+    if docker exec "$CID" bash -c "ss -tlnp 2>/dev/null | grep -q ':$PORT '" 2>/dev/null; then
+        echo "📋 Clipboard já rodando na porta $PORT"
+    else
+        echo "📋 Iniciando ai-clipboard na porta $PORT..."
+        docker exec -d -u dev "$CID" node /home/dev/bin/ai-clipboard "$PORT"
+        sleep 1
+    fi
+
+    echo "🔗 Abrindo tunnel porta $PORT → container"
+    echo ""
+    echo "   No browser do PC, abra:"
+    echo "   http://localhost:$PORT"
+    echo ""
+    echo "   Ctrl+V cola imagem → @path copiado automaticamente"
+    echo "   Ctrl+C para encerrar tunnel"
+    echo ""
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -N -L "$PORT:localhost:$PORT" -p 2222 dev@localhost
+}
+
 # SSH tunnel: forward de porta local para o container
 # Uso: ai-tunnel 9222         (forward localhost:9222 → container:9222)
 #       ai-tunnel 9222 3000    (forward múltiplas portas)
@@ -184,6 +211,9 @@ ai-help() {
   ai-fix-perms               H      Corrige owner em ~/projects (dev:dev)
   ai-ssh                     H      SSH direto no container (porta 2222)
   ai-tunnel <porta> [...]    H      SSH tunnel de portas para o container
+  ai-clipboard [porta]       H      Clipboard bridge: cola imagens via browser
+                                    (default porta 3456, abre tunnel automaticamente)
+  ai-browser [porta|status|stop] C  Chromium headless com CDP (default porta 9222)
   ai-help                    H/C    Esta ajuda
 
   ai-dev <projeto> [flags]   H/C    Cria/reconecta workspace tmux do projeto
@@ -216,6 +246,8 @@ ai-help() {
   (combine livre)    --claude --gemini, --qwen --cursor, etc.
   --rc               adiciona Remote Control no Claude
   --danger           skip-permissions/yolo nos agents que suportam
+  --clipboard        inicia clipboard bridge (cola imagens via browser)
+  --browser          inicia Chromium headless com CDP (DevTools remoto)
 
   Flags --danger por CLI
   ──────────────────────
@@ -256,6 +288,7 @@ echo "   ai-update          → Pull + restart do serviço"
 echo "   ai-version         → Versão da imagem em execução"
 echo "   ai-ssh             → SSH direto no container"
 echo "   ai-tunnel <porta>  → SSH tunnel de porta para o container"
+echo "   ai-clipboard       → Clipboard bridge (cola imagens via browser)"
 echo "   ai-setup           → Configurar defaults do ai-dev"
 echo "   ai-help            → Ajuda completa"
 echo ""
