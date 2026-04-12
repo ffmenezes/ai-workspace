@@ -91,9 +91,13 @@ ai-setup() {
 }
 
 # Apagar projeto (mata sessão + apaga pasta)
+# Corrige permissões como root antes de deletar (arquivos via SFTP/IDE podem ser root-owned)
 ai-delete() {
     local CID; CID=$(_ai_require_container) || return 1
-    docker exec -it "$CID" ai-delete "$1"
+    local PROJECT="$1"
+    [ -z "$PROJECT" ] && { echo "Uso: ai-delete <nome-do-projeto>"; return 1; }
+    docker exec -u root "$CID" chown -R dev:dev "/home/dev/projects/$PROJECT" 2>/dev/null
+    docker exec -it "$CID" ai-delete "$PROJECT"
 }
 
 # Matar TODAS as sessões tmux de projeto (preserva "main")

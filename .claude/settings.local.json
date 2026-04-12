@@ -53,7 +53,11 @@
       "Bash(curl:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(gh api:*)",
-      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(t['path']\\) for t in data.get\\('tree',[]\\) if 'skill' in t['path'].lower\\(\\) or 'SKILL' in t['path'] or 'agents' in t['path'].lower\\(\\)]\")"
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(t['path']\\) for t in data.get\\('tree',[]\\) if 'skill' in t['path'].lower\\(\\) or 'SKILL' in t['path'] or 'agents' in t['path'].lower\\(\\)]\")",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(git commit --amend -m ':*)"
     ]
   }
 }

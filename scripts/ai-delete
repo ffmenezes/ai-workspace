@@ -31,5 +31,12 @@ if tmux has-session -t "$PROJECT" 2>/dev/null; then
 fi
 
 # Apaga pasta do projeto
-rm -rf "$PROJECT_DIR"
+rm -rf "$PROJECT_DIR" 2>/dev/null
+
+if [ -d "$PROJECT_DIR" ]; then
+    echo "⚠️  Alguns arquivos não puderam ser apagados (permissões root)."
+    echo "   Rode no HOST: ai-fix-perms && ai-delete $PROJECT"
+    echo "   Ou:           docker exec -u root <container> rm -rf $PROJECT_DIR"
+    exit 1
+fi
 echo "🗑️  Projeto '$PROJECT' apagado de $PROJECT_DIR"
