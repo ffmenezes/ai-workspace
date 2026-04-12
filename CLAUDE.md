@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Infra-as-code for a containerized multi-agent dev environment built around five AI coding CLIs — **Claude Code**, **Gemini CLI**, **Qwen Code**, **Cursor CLI**, and **OpenCode CLI** — deployed as a Docker Swarm service on a VPS. Browser tooling (Lightpanda, Playwright), `cloudflared`, language toolchains (Go, Rust, uv/Python), and shell utilities are bundled as supporting accessories for the agents but are not the focus of this repo. There is no application code here — only the Dockerfile, the Swarm stack, host/container shell scripts, and shell configs. Edits to this repo change how the workspace container is built and how users interact with it.
+Infra-as-code for a containerized multi-agent dev environment built around eight AI coding CLIs — **Claude Code**, **Gemini CLI**, **Qwen Code**, **Cursor CLI**, **OpenCode CLI**, **Codex CLI**, **Cline CLI**, and **Aider** — deployed as a Docker Swarm service on a VPS. Browser tooling (Lightpanda, Playwright), `cloudflared`, language toolchains (Go, Rust, uv/Python), and shell utilities are bundled as supporting accessories for the agents but are not the focus of this repo. There is no application code here — only the Dockerfile, the Swarm stack, host/container shell scripts, and shell configs. Edits to this repo change how the workspace container is built and how users interact with it.
 
 ## Build / deploy
 
@@ -18,12 +18,15 @@ Infra-as-code for a containerized multi-agent dev environment built around five 
 ## Architecture
 
 - **Base image**: `node:22-bookworm-slim`. Choice is load-bearing: Gemini CLI and Qwen Code require Node 20+, and Claude Code ships glibc-linked binaries (Alpine/musl crashes). Don't switch to Alpine.
-- **The five CLIs**:
+- **The eight CLIs**:
   - Claude Code — Anthropic's native installer; auth in `~/.claude/.credentials.json` (volume `aiworkspace_claude`).
   - Gemini CLI — `npm i -g @google/gemini-cli`; auth via `GEMINI_API_KEY` env var (configure in stack file, not bashrc).
   - Qwen Code — `npm i -g @qwen-code/qwen-code`; OAuth (free tier) in `~/.qwen` (volume `aiworkspace_qwen`).
   - Cursor CLI — native installer; auth in `~/.cursor/cli-config.json` via `agent login` (volume `aiworkspace_cursor`).
   - OpenCode CLI — `npm i -g opencode-ai`; multi-provider auth in `~/.local/share/opencode/auth.json` via `opencode auth login` (volume `aiworkspace_opencode`).
+  - Codex CLI — `npm i -g @openai/codex`; auth in `~/.codex/auth.json` via `codex login --device-auth` or API key in config.toml (volume `aiworkspace_codex`). Credential store set to `file` (no keyring in Docker).
+  - Cline CLI — `npm i -g cline`; auth via `cline auth -p <provider> -k <key>` (volume `aiworkspace_cline`).
+  - Aider — `uv tool install aider-chat`; auth via env vars (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) or `.env` file in project. Config in `~/.aider*` (volume `aiworkspace_aider`).
   **Update story**: Claude and Cursor have native auto-updaters that are *intentionally bypassed* — both binaries are copied to `/opt/{claude,cursor-agent}` (read-only) and symlinked into PATH. Auto-updates download to `~/.local/share/...` but the symlink keeps pointing at the build-time version, so they never run. The only reliable update path for any CLI is image rebuild + `ai-update`. Gemini/Qwen/OpenCode can be updated pontually via `npm update -g ...` inside the container, but those changes vanish on rebuild. When changing how a CLI is installed, updated, or authenticated, update Dockerfile + aiworkspace.yaml + README in lockstep.
 - **Container user**: runs as non-root `dev`. No sudo inside. To install packages at runtime, use `docker exec -u root` from the host (see README "Manutenção"); persistent additions belong in the Dockerfile.
 - **Persistence** is entirely in named Docker volumes mounted into `/home/dev`:
@@ -34,6 +37,10 @@ Infra-as-code for a containerized multi-agent dev environment built around five 
   - `aiworkspace_qwen` → `~/.qwen`
   - `aiworkspace_cursor` → `~/.cursor`
   - `aiworkspace_opencode` → `~/.local/share/opencode`
+  - `aiworkspace_codex` → `~/.codex` (Codex auth + config)
+  - `aiworkspace_cline` → `~/.cline` (Cline auth)
+  - `aiworkspace_aider` → `~/.aider` (Aider config/history)
+  - `aiworkspace_agents` → `~/.agents` (global skills shared across all CLIs)
   - `aiworkspace_ssh` → `~/.ssh`
   Anything written outside these paths is lost on rebuild.
 - **Networking**: container joins `network_swarm_public` so agent MCPs can reach sibling Swarm services (Postgres, Redis, n8n, etc.).
@@ -44,9 +51,20 @@ Infra-as-code for a containerized multi-agent dev environment built around five 
 `scripts/ai-dev` is the workspace launcher invoked from the host. It:
 1. Resolves a project name to `~/projects/<name>` inside the container.
 2. Creates (or attaches to) a tmux session named after the project.
-3. Opens windows based on flags. **Default (no agent flag) opens all five agents**; naming any agent flag (`--claude`, `--gemini`, `--qwen`, `--cursor`, `--opencode`) restricts to only the named ones. `--rc` adds Remote Control to Claude. `--danger` passes the per-CLI danger flag (`--dangerously-skip-permissions`, `--yolo`, `-f`; OpenCode has no equivalent and is silently skipped). `ai-dev-danger` = `ai-dev <projeto> --danger`.
+3. Opens windows based on flags. **Default (no agent flag) opens all eight agents**; naming any agent flag (`--claude`, `--gemini`, `--qwen`, `--cursor`, `--opencode`, `--codex`, `--cline`, `--aider`) restricts to only the named ones. `--rc` adds Remote Control to Claude. `--danger` passes the per-CLI danger flag (`--dangerously-skip-permissions`, `--yolo`, `-f`, `--yes-always`). `ai-dev-danger` = `ai-dev <projeto> --danger`.
 
 When changing agent invocation, flags, or window layout, edit `scripts/ai-dev` and keep `scripts/ai-kill`, `scripts/ai-kill-all`, and `scripts/ai-sessions` consistent with session naming. Container scripts and host aliases share the same names by convention — if you rename one, rename both and update `ai-help`.
+
+## Agent Links (setup-agent-links)
+
+`scripts/setup-agent-links` runs automatically on every `ai-dev` invocation (both create and reconnect). It unifies skills discovery across all 8 CLIs using `.agents/skills/` as the canonical directory (Agent Skills open standard). Key behaviors:
+- Creates `.agents/skills/` in the project if missing.
+- Symlinks global skills from `~/.agents/skills/` into the project's `.agents/skills/`.
+- Creates directory-level symlinks `.claude/skills → .agents/skills` and `.qwen/skills → .agents/skills` (these CLIs don't natively scan `.agents/`). Gemini, Cursor, OpenCode, and Codex read `.agents/skills/` natively.
+- If `.claude/skills/` or `.qwen/skills/` already exist as real directories, migrates their contents to `.agents/skills/` before replacing with symlink.
+- Generates thin-wrapper instruction files (`CLAUDE.md`, `GEMINI.md`, `QWEN.md`, `AGENTS.md`, `.clinerules`, `.cursor/rules/base.mdc`, `CONVENTIONS.md`) pointing to `AGENTS.md` as the shared source of truth. Never overwrites existing files.
+
+Skills created by any CLI (e.g. Claude writing to `.claude/skills/new-skill/`) transparently land in `.agents/skills/` thanks to the directory symlink — all CLIs see it immediately.
 
 ## Ralph loop
 

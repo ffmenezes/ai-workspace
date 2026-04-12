@@ -16,7 +16,29 @@
       "Bash(bash -n scripts/ai-dev)",
       "Bash(bash -n scripts/ai-kill-all)",
       "Bash(bash -n scripts/ralph)",
-      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/build.yml'\\)\\)\")"
+      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/build.yml'\\)\\)\")",
+      "Skill(schedule)",
+      "Bash(mkdir -p /tmp/ralph-ref)",
+      "Read(//tmp/**)",
+      "Bash(unzip -o \"C:/Users/filip/ralph.zip\")",
+      "Bash(xargs -I {} find {} -maxdepth 2 -ls)",
+      "Bash(xargs -I {} bash -c 'echo \"=== {} ===\" && find {} -maxdepth 1 -type l | wc -l && find {} -maxdepth 1 \\\\\\( -type d -o -type l \\\\\\) ! -path \"*/.git\" | head -5')",
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/Filip/Projects/sublimabuilder -type f \\\\\\( -name \"*.sh\" -o -name \"*.ts\" -o -name \"*.js\" -o -name \"*.mjs\" \\\\\\) -exec grep -l \"symlink\\\\|ln -s\\\\|\\\\.claude/skills\" {} \\\\;)",
+      "Bash(find /c/Users/Filip/Projects -name \"settings.local.json\" -exec echo \"=== {} ===\" \\\\; -exec head -50 {} \\\\;)",
+      "Bash(find /c/Users/Filip/Projects/opensquad/.claude/skills -type l -exec echo {} \\\\; -exec readlink {} \\\\;)",
+      "Bash(curl -s \"https://docs.anthropic.com/en/docs/claude-code/memory\")",
+      "Bash(npm info:*)",
+      "WebSearch",
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:qwenlm.github.io)",
+      "WebFetch(domain:aider.chat)",
+      "WebFetch(domain:docs.cline.bot)",
+      "WebFetch(domain:geminicli.com)",
+      "Bash(cp -r .claude/skills/ralph-prompt .agents/skills/ralph-prompt)",
+      "Bash(rm -rf .claude/skills/ralph-prompt)",
+      "Bash(rmdir .claude/skills)",
+      "Bash(ln -s ../.agents/skills skills)"
     ]
   }
 }

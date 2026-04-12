@@ -1,0 +1,156 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# setup-agent-links — Sincroniza skills, instruction files e
+#                      symlinks para que todas as AI CLIs
+#                      compartilhem a mesma base em .agents/
+#
+# Uso:
+#   setup-agent-links <project-dir>
+#   setup-agent-links              → usa $PWD
+#
+# O que faz:
+#   1. Cria .agents/skills/ como diretório canônico
+#   2. Linka skills globais (~/.agents/skills/*) em .agents/skills/
+#   3. Cria symlinks de diretório para CLIs que NÃO leem .agents/:
+#      - .claude/skills → .agents/skills
+#      - .qwen/skills   → .agents/skills
+#   4. Gera instruction file thin wrappers se não existirem
+#
+# Roda automaticamente a cada ai-dev (create ou attach).
+# Idempotente — pode rodar quantas vezes quiser.
+#
+# CLIs que leem .agents/skills/ nativamente:
+#   Gemini, Cursor, OpenCode, Codex
+#
+# CLIs que precisam de symlink:
+#   Claude (.claude/skills/), Qwen (.qwen/skills/)
+#
+# CLIs sem skills system:
+#   Cline (usa .clinerules), Aider (manual)
+# ══════════════════════════════════════════════════════════════
+set -e
+
+DIR="${1:-$PWD}"
+cd "$DIR"
+
+GLOBAL_SKILLS="$HOME/.agents/skills"
+
+# ── 1. Canonical .agents/skills/ ──
+mkdir -p .agents/skills
+
+# ── 2. Link global skills ──
+if [ -d "$GLOBAL_SKILLS" ]; then
+    for skill in "$GLOBAL_SKILLS"/*/; do
+        [ -d "$skill" ] || continue
+        name="$(basename "$skill")"
+        target=".agents/skills/$name"
+        # Skip se já existe (real ou symlink)
+        [ -e "$target" ] || [ -L "$target" ] && continue
+        ln -s "$skill" "$target"
+    done
+fi
+
+# ── 3. Symlinks de diretório para CLIs que não leem .agents/ ──
+#
+# Estratégia: .claude/skills e .qwen/skills apontam para .agents/skills.
+# Se já existe como diretório real (não symlink), migra o conteúdo.
+
+link_cli_skills() {
+    local cli_dir="$1"   # ex: .claude
+    local skills_path="$cli_dir/skills"
+
+    mkdir -p "$cli_dir"
+
+    # Já é symlink correto → nada a fazer
+    if [ -L "$skills_path" ]; then
+        return 0
+    fi
+
+    # Existe como diretório real → migrar conteúdo para .agents/skills/
+    if [ -d "$skills_path" ]; then
+        for item in "$skills_path"/*/; do
+            [ -d "$item" ] || continue
+            name="$(basename "$item")"
+            dest=".agents/skills/$name"
+            # Só move se não existe no destino
+            if [ ! -e "$dest" ] && [ ! -L "$dest" ]; then
+                mv "$item" "$dest"
+            fi
+        done
+        # Remover diretório original (agora vazio ou com restos)
+        rm -rf "$skills_path"
+    fi
+
+    # Criar symlink relativo
+    ln -s ../".agents/skills" "$skills_path"
+}
+
+link_cli_skills ".claude"
+link_cli_skills ".qwen"
+
+# ── 4. Instruction file thin wrappers ──
+#
+# Gera arquivo base se não existir. Não sobreescreve.
+# O conteúdo é um wrapper mínimo que aponta para AGENTS.md.
+
+create_if_missing() {
+    local file="$1"
+    local content="$2"
+    [ -f "$file" ] && return 0
+    echo "$content" > "$file"
+}
+
+PROJECT_NAME="$(basename "$DIR")"
+
+# AGENTS.md — OpenCode + Codex (primary instruction file)
+create_if_missing "AGENTS.md" "# $PROJECT_NAME
+
+Project instructions for AI agents. Edit this file to add context about this project.
+
+## Project Overview
+<!-- Describe what this project is and its architecture -->
+
+## Conventions
+<!-- Coding standards, patterns, and rules -->
+
+## How to Build / Test
+<!-- Commands to build, test, and run the project -->"
+
+# CLAUDE.md — Claude Code
+create_if_missing "CLAUDE.md" "# $PROJECT_NAME
+
+Read AGENTS.md for full project context — it is the shared source of truth for all AI agents."
+
+# GEMINI.md — Gemini CLI
+create_if_missing "GEMINI.md" "# $PROJECT_NAME
+
+Read AGENTS.md for full project context — it is the shared source of truth for all AI agents."
+
+# QWEN.md — Qwen Code
+create_if_missing "QWEN.md" "# $PROJECT_NAME
+
+Read AGENTS.md for full project context — it is the shared source of truth for all AI agents."
+
+# .clinerules — Cline
+create_if_missing ".clinerules" "Read AGENTS.md for full project context — it is the shared source of truth for all AI agents."
+
+# .cursor/rules/base.mdc — Cursor
+if [ ! -f ".cursor/rules/base.mdc" ]; then
+    mkdir -p ".cursor/rules"
+    cat > ".cursor/rules/base.mdc" << 'CURSORRULE'
+---
+description: Base project rules
+globs: "**/*"
+alwaysApply: true
+---
+
+Read AGENTS.md for full project context — it is the shared source of truth for all AI agents.
+CURSORRULE
+fi
+
+# CONVENTIONS.md — Aider (manual load, but have it ready)
+create_if_missing "CONVENTIONS.md" "# $PROJECT_NAME
+
+Read AGENTS.md for full project context — it is the shared source of truth for all AI agents.
+
+Note: Load this file in aider with: /read CONVENTIONS.md"

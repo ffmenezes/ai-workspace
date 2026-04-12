@@ -54,7 +54,7 @@ ai-attach() {
 }
 
 # Criar/reconectar workspace tmux de um projeto
-# Uso: ai-dev <projeto> [--claude] [--gemini] [--qwen] [--cursor] [--opencode] [--rc] [--danger]
+# Uso: ai-dev <projeto> [--claude] [--gemini] [--qwen] [--cursor] [--opencode] [--codex] [--cline] [--aider] [--rc] [--danger]
 ai-dev() {
     local CID; CID=$(_ai_require_container) || return 1
     docker exec -it "$CID" zsh -lc "ai-dev $*"
@@ -82,6 +82,12 @@ ai-sessions() {
 ai-kill() {
     local CID; CID=$(_ai_require_container) || return 1
     docker exec -it "$CID" ai-kill "$1"
+}
+
+# Configurar defaults do ai-dev (quais agents abrem por padrão)
+ai-setup() {
+    local CID; CID=$(_ai_require_container) || return 1
+    docker exec -it "$CID" ai-setup "$@"
 }
 
 # Matar TODAS as sessões tmux de projeto (preserva "main")
@@ -155,18 +161,26 @@ ai-help() {
   ai-kill <projeto>          H/C    Mata uma sessão tmux específica
   ai-kill-all                H/C    Mata TODAS as sessões (preserva "main")
 
+  ai-setup                   H/C    Define quais agents abrem por padrão
+  ai-setup --reset           H/C    Reseta config e roda wizard de novo
+
   ralph -a <agent> -p "..."  C      Loop autônomo de um agent até concluir
   claude / gemini / qwen     C      Invocar uma CLI diretamente
   cursor / opencode          C      (idem)
+  codex / cline / aider      C      (idem)
 
   Flags do ai-dev
   ───────────────
-  (sem flag)         abre TODOS os agents (= --all)
+  (sem flag)         abre os DEFAULTS (configurados via ai-setup)
   --claude           só Claude
   --gemini           só Gemini
   --qwen             só Qwen
   --cursor           só Cursor
   --opencode         só OpenCode
+  --codex            só Codex
+  --cline            só Cline
+  --aider            só Aider
+  --all              TODOS os 8 agents (override dos defaults)
   (combine livre)    --claude --gemini, --qwen --cursor, etc.
   --rc               adiciona Remote Control no Claude
   --danger           skip-permissions/yolo nos agents que suportam
@@ -178,6 +192,9 @@ ai-help() {
   qwen      --yolo
   cursor    -f
   opencode  (sem equivalente — ignorado)
+  codex     --yolo
+  cline     --yolo
+  aider     --yes-always
 
   Como atualizar as CLIs
   ──────────────────────
@@ -205,6 +222,7 @@ echo "   ai-kill-all        → Matar todas as sessões de projeto"
 echo "   ai-fix-perms       → Corrigir permissões em ~/projects"
 echo "   ai-update          → Pull + restart do serviço"
 echo "   ai-version         → Versão da imagem em execução"
+echo "   ai-setup           → Configurar defaults do ai-dev"
 echo "   ai-help            → Ajuda completa"
 echo ""
 echo "⚡ Rode agora:  source ~/.bashrc  &&  ai-help"

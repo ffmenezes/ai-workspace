@@ -102,7 +102,11 @@ RUN useradd -m -s /bin/zsh dev \
     && mkdir -p /home/dev/.qwen \
     && mkdir -p /home/dev/.cursor \
     && mkdir -p /home/dev/.local/share/opencode \
+    && mkdir -p /home/dev/.codex \
+    && mkdir -p /home/dev/.cline \
+    && mkdir -p /home/dev/.aider \
     && mkdir -p /home/dev/.ssh \
+    && mkdir -p /home/dev/.agents/skills \
     && mkdir -p /home/dev/bin \
     && chown -R dev:dev /home/dev
 
@@ -124,6 +128,15 @@ RUN curl -fsSL https://cursor.com/install | bash
 
 # ── OpenCode CLI ──
 RUN npm install -g opencode-ai
+
+# ── Codex CLI (OpenAI) ──
+RUN npm install -g @openai/codex
+
+# ── Cline CLI ──
+RUN npm install -g cline
+
+# ── Aider (Python — instala via uv que já está no PATH do root) ──
+RUN /root/.cargo/bin/uv tool install aider-chat
 
 # ══════════════════════════════════════════════════════════════
 # LAYER 6: Fix permissões (depende das CLIs acima)
@@ -152,7 +165,14 @@ RUN mkdir -p /opt/claude \
     && chmod -R a+rX /opt/cursor-agent \
     # uv + rust (cargo, rustc, rustup)
     && cp /root/.cargo/bin/* /usr/local/bin/ 2>/dev/null || true \
-    && chmod -R a+rX /root/.rustup 2>/dev/null || true
+    && chmod -R a+rX /root/.rustup 2>/dev/null || true \
+    # Aider (uv tool instala em /root/.local/bin/)
+    && cp /root/.local/bin/aider /usr/local/bin/aider 2>/dev/null || true \
+    && chmod -R a+rX /root/.local/share/uv 2>/dev/null || true \
+    # Codex: config padrão p/ usar file-based credentials (sem keyring em Docker)
+    && mkdir -p /home/dev/.codex \
+    && echo 'cli_auth_credentials_store = "file"' > /home/dev/.codex/config.toml \
+    && chown -R dev:dev /home/dev/.codex
 
 # ══════════════════════════════════════════════════════════════
 # LAYER 7: Configs do user dev (COPY invalida cache se mudou)

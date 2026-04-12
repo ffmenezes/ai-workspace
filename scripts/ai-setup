@@ -1,0 +1,87 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════
+# ai-setup — Define quais agents abrem por padrão no ai-dev
+#
+# Uso:
+#   ai-setup              → wizard interativo
+#   ai-setup --reset      → apaga config e roda wizard de novo
+#
+# Config salva em: ~/.config/ai-workspace/defaults.conf
+# Formato: DEFAULT_AGENTS="claude gemini aider" (espaço-separado)
+# ══════════════════════════════════════════════════════════════
+set -e
+
+CONFIG_DIR="$HOME/.config/ai-workspace"
+CONFIG_FILE="$CONFIG_DIR/defaults.conf"
+
+if [ "$1" = "--reset" ]; then
+    rm -f "$CONFIG_FILE"
+    echo "🗑️  Config removida."
+fi
+
+mkdir -p "$CONFIG_DIR"
+
+ALL_AGENTS=(claude gemini qwen cursor opencode codex cline aider)
+
+echo ""
+echo "🔧 AI Workspace — Setup"
+echo "══════════════════════════════════════"
+echo ""
+echo "Quais agents devem abrir por padrão no ai-dev?"
+echo "(Quando rodar ai-dev <projeto> sem flags)"
+echo ""
+
+# Se já tem config, mostrar seleção atual
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+    echo "Config atual: $DEFAULT_AGENTS"
+    echo ""
+fi
+
+# Mostrar opções com toggle
+echo "Selecione os agents (espaço-separado, ex: 1 3 6):"
+echo ""
+for i in "${!ALL_AGENTS[@]}"; do
+    printf "  %d) %s\n" $((i+1)) "${ALL_AGENTS[$i]}"
+done
+echo ""
+echo "  a) Todos (${#ALL_AGENTS[@]} agents)"
+echo ""
+read -rp "Escolha: " CHOICES
+
+if [ -z "$CHOICES" ]; then
+    echo "❌ Nenhuma seleção feita."
+    exit 1
+fi
+
+# Parsear seleção
+SELECTED=()
+if [[ "$CHOICES" =~ ^[aA]$ ]]; then
+    SELECTED=("${ALL_AGENTS[@]}")
+else
+    for choice in $CHOICES; do
+        idx=$((choice - 1))
+        if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#ALL_AGENTS[@]}" ]; then
+            SELECTED+=("${ALL_AGENTS[$idx]}")
+        else
+            echo "⚠️  '$choice' ignorado (fora do range)"
+        fi
+    done
+fi
+
+if [ ${#SELECTED[@]} -eq 0 ]; then
+    echo "❌ Nenhum agent válido selecionado."
+    exit 1
+fi
+
+# Salvar
+echo "DEFAULT_AGENTS=\"${SELECTED[*]}\"" > "$CONFIG_FILE"
+
+echo ""
+echo "✅ Defaults salvos: ${SELECTED[*]}"
+echo "   Config: $CONFIG_FILE"
+echo ""
+echo "   ai-dev <projeto>          → abre: ${SELECTED[*]}"
+echo "   ai-dev <projeto> --claude → override: só claude"
+echo "   ai-dev <projeto> --all    → override: todos os 8"
+echo ""

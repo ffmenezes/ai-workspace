@@ -1,7 +1,7 @@
 version: "3.7"
 
 # ══════════════════════════════════════════════════════════════
-# AI Workspace — Claude Code + Gemini + Qwen + Cursor + OpenCode
+# AI Workspace — Claude Code + Gemini + Qwen + Cursor + OpenCode + Codex + Cline + Aider
 # ══════════════════════════════════════════════════════════════
 
 services:
@@ -34,6 +34,10 @@ services:
       - aiworkspace_qwen:/home/dev/.qwen
       - aiworkspace_cursor:/home/dev/.cursor
       - aiworkspace_opencode:/home/dev/.local/share/opencode
+      - aiworkspace_codex:/home/dev/.codex
+      - aiworkspace_cline:/home/dev/.cline
+      - aiworkspace_aider:/home/dev/.aider
+      - aiworkspace_agents:/home/dev/.agents
       - aiworkspace_ssh:/home/dev/.ssh
 
     deploy:
@@ -72,6 +76,18 @@ volumes:
   aiworkspace_opencode:
     external: true
     name: aiworkspace_opencode
+  aiworkspace_codex:
+    external: true
+    name: aiworkspace_codex
+  aiworkspace_cline:
+    external: true
+    name: aiworkspace_cline
+  aiworkspace_aider:
+    external: true
+    name: aiworkspace_aider
+  aiworkspace_agents:
+    external: true
+    name: aiworkspace_agents
   aiworkspace_ssh:
     external: true
     name: aiworkspace_ssh

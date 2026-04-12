@@ -8,10 +8,11 @@ no Docker Swarm, com persistência em volumes e acesso via Termius.
 ## TL;DR
 
 ```bash
-# 1. Na VPS: descompactar, buildar, deploy
+# 1. Na VPS: ter o repo (só precisa do aiworkspace.yaml) e fazer deploy
+#    Imagem: ghcr.io/ffmenezes/ai-workspace:latest (GitHub Actions → GHCR, não Docker Hub).
+#    Build local só se você customizar o Dockerfile — ver "Passo 3: Obter a imagem".
 cd ~/ai-workspace
-docker build -t ai-workspace:latest .
-# Deploy via Portainer (Stacks → Add Stack → colar aiworkspace.yaml)
+# Deploy via Portainer (Stacks → Add Stack → colar aiworkspace.yaml) — o Swarm faz pull da imagem
 
 # 2. Instalar atalhos no host
 curl -fsSL https://raw.githubusercontent.com/ffmenezes/ai-workspace/main/setup-host-aliases.sh | bash && source ~/.bashrc
@@ -105,7 +106,8 @@ VPS (Debian 12)
 │   └── ai-workspace (container)        ← Claude + Gemini + Qwen + Cursor + OpenCode
 │       ├── /home/dev/projects  → vol   ← repos, código
 │       ├── /home/dev/.config   → vol   ← auth tokens, settings
-│       ├── /home/dev/.claude   → vol   ← skills, CLAUDE.md
+│       ├── /home/dev/.agents   → vol   ← skills globais (todas as CLIs)
+│       ├── /home/dev/.claude   → vol   ← auth Claude
 │       ├── /home/dev/.gemini   → vol   ← sessions, memory
 │       └── /home/dev/.ssh      → vol   ← chaves SSH
 │
@@ -164,6 +166,7 @@ scp -r ./* sua-vps:~/ai-workspace/
 ```bash
 docker volume create aiworkspace_projects
 docker volume create aiworkspace_config
+docker volume create aiworkspace_agents
 docker volume create aiworkspace_claude
 docker volume create aiworkspace_gemini
 docker volume create aiworkspace_qwen
@@ -532,6 +535,59 @@ ralph -a claude -f prompt.md -d    # inicia o loop
 # Volta depois: ai-enter → cd ~/projects/meu-projeto → cat .ralph-logs/loop-*.log
 ```
 
+### Agent Links — skills compartilhadas entre todas as CLIs
+
+O `ai-dev` roda automaticamente o `setup-agent-links` a cada abertura de projeto.
+Esse script garante que **todas as 8 CLIs** enxerguem as mesmas skills, sem
+duplicação e sem manutenção manual.
+
+**Como funciona:**
+
+```
+~/projects/meu-app/
+  .agents/
+    skills/                          ← diretório canônico (REAL)
+      ralph-prompt → ~/.agents/skills/ralph-prompt   ← global (symlink)
+      minha-skill/SKILL.md                           ← local (criada por qualquer CLI)
+
+  .claude/skills → .agents/skills    ← symlink de diretório (auto)
+  .qwen/skills   → .agents/skills    ← symlink de diretório (auto)
+  # Gemini, Cursor, OpenCode, Codex já leem .agents/skills/ nativamente
+```
+
+**Skills globais** ficam em `~/.agents/skills/` (volume `aiworkspace_agents`).
+Ao abrir qualquer projeto, o setup cria symlinks em `.agents/skills/` apontando
+para cada skill global — disponíveis em todos os projetos automaticamente.
+
+**Skills locais** criadas por qualquer CLI (Claude, Gemini, etc.) vão parar em
+`.agents/skills/` graças aos symlinks de diretório — a escrita atravessa o
+symlink. Todas as CLIs enxergam imediatamente.
+
+**Instruction files** são thin wrappers gerados automaticamente se não existirem:
+
+| Arquivo | CLI | Conteúdo |
+|---------|-----|----------|
+| `AGENTS.md` | OpenCode, Codex | Fonte de verdade principal |
+| `CLAUDE.md` | Claude Code | Aponta para AGENTS.md |
+| `GEMINI.md` | Gemini CLI | Aponta para AGENTS.md |
+| `QWEN.md` | Qwen Code | Aponta para AGENTS.md |
+| `.cursor/rules/base.mdc` | Cursor | Aponta para AGENTS.md |
+| `.clinerules` | Cline | Aponta para AGENTS.md |
+| `CONVENTIONS.md` | Aider | Aponta para AGENTS.md |
+
+**Compatibilidade por CLI:**
+
+| CLI | Lê `.agents/skills/`? | Precisa symlink? | MCP config |
+|-----|----------------------|-----------------|------------|
+| Claude Code | Não | `.claude/skills →` | `.mcp.json` |
+| Gemini CLI | Sim | — | `.gemini/settings.json` |
+| Qwen Code | Não | `.qwen/skills →` | `.qwen/settings.json` |
+| Cursor | Sim | — | `.cursor/mcp.json` |
+| OpenCode | Sim | — | `opencode.json` |
+| Codex CLI | Sim | — | `.codex/config.toml` |
+| Cline | N/A (sem skills) | — | Sem project-level |
+| Aider | N/A (sem skills) | — | Sem MCP nativo |
+
 ---
 
 ## Snippets do Termius
@@ -627,7 +683,7 @@ push. Versões "pinadas" via `ARG` ainda não estão implementadas (ver
 ### Backup dos volumes
 
 ```bash
-for vol in projects config claude gemini qwen cursor opencode ssh; do
+for vol in projects config agents claude gemini qwen cursor opencode ssh; do
     docker run --rm \
         -v aiworkspace_${vol}:/data \
         -v /opt/backups:/backup \

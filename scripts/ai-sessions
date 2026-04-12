@@ -22,9 +22,15 @@ echo "🤖 Processos ativos:"
 CLAUDE_COUNT=$(pgrep -c -f "claude" 2>/dev/null || echo "0")
 GEMINI_COUNT=$(pgrep -c -f "gemini" 2>/dev/null || echo "0")
 QWEN_COUNT=$(pgrep -c -f "qwen" 2>/dev/null || echo "0")
+CODEX_COUNT=$(pgrep -c -f "codex" 2>/dev/null || echo "0")
+CLINE_COUNT=$(pgrep -c -f "cline" 2>/dev/null || echo "0")
+AIDER_COUNT=$(pgrep -c -f "aider" 2>/dev/null || echo "0")
 echo "   Claude Code: $CLAUDE_COUNT processo(s)"
 echo "   Gemini CLI:  $GEMINI_COUNT processo(s)"
 echo "   Qwen Code:   $QWEN_COUNT processo(s)"
+echo "   Codex CLI:   $CODEX_COUNT processo(s)"
+echo "   Cline CLI:   $CLINE_COUNT processo(s)"
+echo "   Aider:       $AIDER_COUNT processo(s)"
 echo ""
 
 # Projetos
