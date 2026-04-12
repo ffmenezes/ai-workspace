@@ -211,6 +211,11 @@ COPY --chown=dev:dev zshrc /home/dev/.zshrc
 COPY --chown=dev:dev bashrc.append /tmp/bashrc.append
 RUN cat /tmp/bashrc.append >> /home/dev/.bashrc && rm /tmp/bashrc.append
 
+# ── Docs (acessíveis dentro do container em ~/docs) ──
+COPY --chown=dev:dev docs/ /opt/docs/
+COPY --chown=dev:dev README.md /opt/docs/README.md
+RUN ln -s /opt/docs /home/dev/docs
+
 # ── Default skills (baked na imagem, seeded no volume no boot) ──
 COPY --chown=dev:dev .agents/skills/ /opt/default-skills/
 

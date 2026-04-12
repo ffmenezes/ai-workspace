@@ -265,7 +265,61 @@ ai-help() {
   Único caminho confiável: rebuild da imagem (push pra GitHub → Actions
   builda) + ai-update na VPS. Auto-updaters do Claude/Cursor estão
   bloqueados pelo layout do Dockerfile (binários em /opt read-only).
-  Detalhes em README "Por que rebuild e não auto-update?".
+
+╔══════════════════════════════════════════════════════════════════════╗
+║  Primeiro acesso — setup rápido                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+  1. SSH (escolha uma opção)
+  ─────────────────────────
+  Opç��o A — env var no stack (recomendado, sobrevive a tudo):
+    1) cat ~/.ssh/id_ed25519.pub   (gere com ssh-keygen se não existir)
+    2) Descomente SSH_AUTHORIZED_KEYS no aiworkspace.yaml e cole a chave
+    3) Redeploy do stack
+
+  Opção B — docker exec (rápido, mas manual):
+    cat ~/.ssh/id_ed25519.pub | docker exec -i \
+      $(docker ps -q -f name=aiworkspace) \
+      tee /home/dev/.ssh/authorized_keys
+
+  Testar: ai-ssh
+
+  2. Autenticar as CLIs
+  ─────────────────────
+  ai-enter
+    claude /login                     # browser OAuth (Pro/Max)
+    gemini --version                  # GEMINI_API_KEY no aiworkspace.yaml
+    qwen                              # Qwen OAuth gratuito
+    agent login                       # Cursor OAuth
+    opencode auth login               # multi-provider
+    codex login --device-auth         # OpenAI device auth
+    cline auth -p anthropic -k KEY    # provider + API key
+    # Aider: env vars no aiworkspace.yaml ou .env no projeto
+  exit
+
+  3. Configurar defaults
+  ──────────────────────
+  ai-setup                            # wizard: agents + clipboard + browser
+
+  4. Criar workspace
+  ──────────────────
+  ai-dev meu-projeto                  # usa defaults do ai-setup
+  ai-dev meu-projeto --claude --clipboard --browser   # override
+
+  5. Clipboard + Browser (se ativados)
+  ─────────────────────────────────────
+  No host:     ai-tunnel 3456 9222    # tunnel das duas portas
+  No PC:       ssh -L 13456:localhost:3456 -L 19222:localhost:9222 root@<vps>
+  Browser PC:  http://localhost:13456           → Ctrl+V cola imagem
+  Chrome PC:   chrome://inspect → localhost:19222 → DevTools remoto
+
+  Documentação completa
+  ─────────────────────
+  Dentro do container:  ls ~/docs/
+    README.md               → guia completo de deploy e uso
+    browser-automation.md   → agent-browser, Playwright, Lightpanda
+    cdp-live-debugging.md   → Chrome DevTools remoto passo a passo
+    troubleshooting.md      → diagnóstico de problemas comuns
 
 HELP
 }
