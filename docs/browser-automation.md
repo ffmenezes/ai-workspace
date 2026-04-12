@@ -263,6 +263,63 @@ Precisa de browser automation?
 
 ---
 
+## 4. Shared Chromium CDP (ai-dev --browser)
+
+Quando o workspace é iniciado com `--browser`, um Chromium headless permanece rodando com CDP na porta 9222. Isso habilita:
+
+- **DevTools bidirecional**: o dev vê e interage via `chrome://inspect` no PC
+- **Agents conectam via CDP**: Playwright `connectOverCDP()` ou `agent-browser --cdp 9222`
+- **Mesmo browser para todos**: dev e agents veem as mesmas abas e estado
+
+### Início rápido
+
+```bash
+# No host da VPS:
+ai-dev meu-projeto --claude --browser
+
+# Em outro terminal do host:
+ai-tunnel 9222
+
+# No PC:
+ssh -L 19222:localhost:9222 root@<ip-vps>
+# Chrome: chrome://inspect → Configure → localhost:19222
+```
+
+### Uso por agents
+
+Agents com a skill `cdp-shared` sabem conectar automaticamente. Basta pedir:
+
+> "Tira um screenshot do que estou vendo no browser"
+> "Abre uma nova aba em https://example.com"
+> "O que tem na página que estou olhando?"
+
+O agent conecta ao Chromium compartilhado via `connectOverCDP('http://localhost:9222')`.
+
+### Gerenciamento direto
+
+```bash
+ai-browser          # inicia (idempotente)
+ai-browser status   # verifica se está rodando
+ai-browser stop     # para o Chromium
+```
+
+### Regras importantes
+
+- **Nunca fechar o browser** (`browser.close()`) — ele é compartilhado
+- **Nunca lançar novo** (`chromium.launch()`) — sempre conectar ao existente
+- **Screenshots em `~/.clipboard/`** — para fácil referência com `@path`
+
+### Combinando com ai-clipboard
+
+```bash
+# Workspace completo: agent + clipboard + browser
+ai-dev meu-projeto --claude --clipboard --browser
+```
+
+O dev cola imagens via clipboard bridge (:3456), o agent tira screenshots via CDP (:9222), e ambos salvam em `~/.clipboard/` para referência cruzada.
+
+---
+
 ## Variáveis de ambiente relevantes
 
 | Variável | Valor no container | Descrição |

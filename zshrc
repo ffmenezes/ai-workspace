@@ -24,6 +24,7 @@ eval "$(starship init zsh)"
 # ── Banner de versão (só em shell interativo) ──
 if [[ -o interactive ]] && [ -n "$AI_WORKSPACE_VERSION" ]; then
     echo "🤖 AI Workspace v${AI_WORKSPACE_VERSION} (commit ${AI_WORKSPACE_COMMIT:0:7}, built ${AI_WORKSPACE_BUILD_DATE})"
+    echo "   Welcome $(whoami)@$(hostname)"
 fi
 
 # ── Modern Unix tools (sem sobrescrever comandos nativos) ──
