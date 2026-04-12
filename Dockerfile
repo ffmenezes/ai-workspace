@@ -243,10 +243,10 @@ ENV STARSHIP_CONFIG="/home/dev/.config/starship.toml"
 
 # Entrypoint: roda como root (inicia sshd), dropa pra dev (tmux + tail).
 # Lógica extraída para scripts/entrypoint.sh pra manutenção.
-COPY --chown=root:root scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+USER root
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-USER root
 EXPOSE 2222
 
 CMD ["/usr/local/bin/entrypoint.sh"]
