@@ -30,12 +30,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip python3-venv \
     # Build tools (gcc, make — compilar do source)
     build-essential pkg-config libssl-dev \
-    # SSH client
-    openssh-client \
+    # SSH client + server (sshd para tunneling através do Swarm overlay)
+    openssh-client openssh-server gosu \
     # Utilitários
     less nano htop tree \
     && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/fdfind /usr/local/bin/fd
+    && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
+    # sshd config: pubkey only, porta 2222, tunnel habilitado
+    && mkdir -p /run/sshd \
+    && printf 'Port 2222\nPermitRootLogin no\nPasswordAuthentication no\nPubkeyAuthentication yes\nAllowUsers dev\nX11Forwarding no\nAllowTcpForwarding yes\nGatewayPorts no\nPrintMotd no\n' > /etc/ssh/sshd_config.d/workspace.conf
 
 # ══════════════════════════════════════════════════════════════
 # LAYER 2: Runtimes e build tools (raramente muda)
@@ -238,7 +241,12 @@ ENV RUSTUP_HOME="/root/.rustup"
 ENV CARGO_HOME="/home/dev/.cargo"
 ENV STARSHIP_CONFIG="/home/dev/.config/starship.toml"
 
-# Boot log: registra versão + timestamp no startup do container.
-# Surface via `docker logs <container>` (stdout) e via arquivo persistente
-# em /home/dev/.ai-workspace.log (writable pelo user dev).
-CMD ["bash", "-c", "echo \"[$(date -Iseconds)] AI Workspace started — version=${AI_WORKSPACE_VERSION} commit=${AI_WORKSPACE_COMMIT} build_date=${AI_WORKSPACE_BUILD_DATE}\" | tee -a /home/dev/.ai-workspace.log; if [ ! -f /home/dev/.claude.json ]; then LATEST=$(ls -t /home/dev/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1); if [ -n \"$LATEST\" ]; then cp \"$LATEST\" /home/dev/.claude.json && echo \"[$(date -Iseconds)] Restored ~/.claude.json from $LATEST\" | tee -a /home/dev/.ai-workspace.log; fi; fi; mkdir -p /home/dev/.agents/skills; for skill in /opt/default-skills/*/; do name=$(basename \"$skill\"); if [ ! -d \"/home/dev/.agents/skills/$name\" ]; then cp -r \"$skill\" \"/home/dev/.agents/skills/$name\" && echo \"[$(date -Iseconds)] Seeded default skill: $name\" | tee -a /home/dev/.ai-workspace.log; fi; done; tmux new-session -d -s main && tail -f /home/dev/.ai-workspace.log"]
+# Entrypoint: roda como root (inicia sshd), dropa pra dev (tmux + tail).
+# Lógica extraída para scripts/entrypoint.sh pra manutenção.
+COPY --chown=root:root scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+USER root
+EXPOSE 2222
+
+CMD ["/usr/local/bin/entrypoint.sh"]

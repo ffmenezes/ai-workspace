@@ -12,6 +12,18 @@ services:
     stdin_open: true
     tty: true
 
+    ports:
+      - target: 9222
+        published: 9222
+        protocol: tcp
+        mode: host
+
+    ports:
+      - target: 2222
+        published: 2222
+        protocol: tcp
+        mode: host
+
     networks:
       - network_swarm_public
 

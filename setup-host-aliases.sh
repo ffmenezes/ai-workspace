@@ -142,6 +142,25 @@ ai-update() {
     echo "✅ Workspace atualizado"
 }
 
+# SSH direto no container (requer authorized_keys no volume .ssh)
+ai-ssh() {
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 dev@localhost "$@"
+}
+
+# SSH tunnel: forward de porta local para o container
+# Uso: ai-tunnel 9222         (forward localhost:9222 → container:9222)
+#       ai-tunnel 9222 3000    (forward múltiplas portas)
+ai-tunnel() {
+    [ $# -eq 0 ] && { echo "Uso: ai-tunnel <porta> [porta2] [porta3] ..."; return 1; }
+    local FORWARDS=""
+    for PORT in "$@"; do
+        FORWARDS="$FORWARDS -L $PORT:localhost:$PORT"
+    done
+    echo "Tunnel ativo: $(echo "$@" | tr ' ' ', ') → container"
+    echo "Ctrl+C para encerrar"
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -N $FORWARDS -p 2222 dev@localhost
+}
+
 # Ajuda — lista todos os comandos ai-* disponíveis
 ai-help() {
     cat << 'HELP'
@@ -163,6 +182,8 @@ ai-help() {
                                     (AI_WORKSPACE_SERVICE override do nome)
   ai-version                 H      Mostra versão da imagem em execução + boot log
   ai-fix-perms               H      Corrige owner em ~/projects (dev:dev)
+  ai-ssh                     H      SSH direto no container (porta 2222)
+  ai-tunnel <porta> [...]    H      SSH tunnel de portas para o container
   ai-help                    H/C    Esta ajuda
 
   ai-dev <projeto> [flags]   H/C    Cria/reconecta workspace tmux do projeto
@@ -233,6 +254,8 @@ echo "   ai-kill-all        → Matar todas as sessões de projeto"
 echo "   ai-fix-perms       → Corrigir permissões em ~/projects"
 echo "   ai-update          → Pull + restart do serviço"
 echo "   ai-version         → Versão da imagem em execução"
+echo "   ai-ssh             → SSH direto no container"
+echo "   ai-tunnel <porta>  → SSH tunnel de porta para o container"
 echo "   ai-setup           → Configurar defaults do ai-dev"
 echo "   ai-help            → Ajuda completa"
 echo ""

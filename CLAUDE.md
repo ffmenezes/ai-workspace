@@ -45,7 +45,8 @@ Infra-as-code for a containerized multi-agent dev environment built around eight
   - `aiworkspace_ssh` → `~/.ssh`
   Anything written outside these paths is lost on rebuild.
 - **Networking**: container joins `network_swarm_public` so agent MCPs can reach sibling Swarm services (Postgres, Redis, n8n, etc.).
-- **Host integration**: `setup-host-aliases.sh` installs shell functions on the VPS host, all prefixed `ai-` (`ai-enter`, `ai-attach`, `ai-dev`, `ai-dev-danger`, `ai-sessions`, `ai-kill`, `ai-kill-all`, `ai-fix-perms`, `ai-update`, `ai-help`). These are the user's main entry points — most just `docker exec` the equivalently-named script inside the container. `ai-help` is the canonical reference and includes a column showing where each command runs (host vs container).
+- **Host integration**: `setup-host-aliases.sh` installs shell functions on the VPS host, all prefixed `ai-` (`ai-enter`, `ai-attach`, `ai-dev`, `ai-dev-danger`, `ai-sessions`, `ai-kill`, `ai-kill-all`, `ai-fix-perms`, `ai-update`, `ai-ssh`, `ai-tunnel`, `ai-help`). These are the user's main entry points — most just `docker exec` the equivalently-named script inside the container. `ai-help` is the canonical reference and includes a column showing where each command runs (host vs container).
+- **SSH server**: The container runs `sshd` on port 2222 (pubkey auth only, no passwords, no root login). This exists to enable SSH tunneling through the Docker Swarm overlay network, which blocks direct host-to-container port access. Use `ai-ssh` to connect or `ai-tunnel <port>` to forward ports (e.g., `ai-tunnel 9222` for CDP). Requires `authorized_keys` in the `aiworkspace_ssh` volume. The entrypoint (`scripts/entrypoint.sh`) runs as root (starts sshd), then drops to `dev` via `gosu`.
 
 ## How `ai-dev` works (the core UX)
 
