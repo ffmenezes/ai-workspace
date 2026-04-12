@@ -161,6 +161,8 @@ RUN mkdir -p /opt/claude \
     && cp -rL /root/.local/share/claude/* /opt/claude/ 2>/dev/null || true \
     && rm -f /usr/local/bin/claude \
     && ln -sf /opt/claude/versions/$(ls /opt/claude/versions/ | head -1) /usr/local/bin/claude \
+    && mkdir -p /home/dev/.local/bin \
+    && ln -sf /usr/local/bin/claude /home/dev/.local/bin/claude \
     && chmod -R a+rX /opt/claude \
     # Cursor CLI: instala como "agent" em /root/.local/share/cursor-agent/
     && mkdir -p /opt/cursor-agent \
