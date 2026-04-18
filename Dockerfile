@@ -149,10 +149,17 @@ RUN npm install -g opencode-ai
 RUN npm install -g @openai/codex
 
 # ── Cline CLI ──
-RUN npm install -g cline
+# kanban é uma dep companion que o cline tenta auto-instalar no 1º run;
+# pré-instalamos aqui pra evitar EACCES em /usr/local/lib/node_modules/ como user dev.
+RUN npm install -g cline kanban
 
 # ── Aider (Python — instala via uv que já está no PATH do root) ──
-RUN /root/.local/bin/uv tool install aider-chat
+# UV_TOOL_DIR/UV_TOOL_BIN_DIR redirecionam a instalação pra /opt (acessível pelo
+# user `dev`); instalar no default /root/.local/share/uv/ cria um shim com shebang
+# apontando pra /root/... que é 700 e não-atravessável pelo dev → "permission denied".
+RUN UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
+    /root/.local/bin/uv tool install aider-chat \
+    && chmod -R a+rX /opt/uv-tools
 
 # ══════════════════════════════════════════════════════════════
 # LAYER 6: Fix permissões (depende das CLIs acima)
@@ -184,9 +191,7 @@ RUN mkdir -p /opt/claude \
     # uv + rust (cargo, rustc, rustup)
     && cp /root/.cargo/bin/* /usr/local/bin/ 2>/dev/null || true \
     && chmod -R a+rX /root/.rustup 2>/dev/null || true \
-    # Aider (uv tool instala em /root/.local/bin/)
-    && cp /root/.local/bin/aider /usr/local/bin/aider 2>/dev/null || true \
-    && chmod -R a+rX /root/.local/share/uv 2>/dev/null || true \
+    # Aider: já instalado direto em /usr/local/bin via UV_TOOL_BIN_DIR (LAYER 5)
     # Codex: config padrão p/ usar file-based credentials (sem keyring em Docker)
     && mkdir -p /home/dev/.codex \
     && echo 'cli_auth_credentials_store = "file"' > /home/dev/.codex/config.toml \
