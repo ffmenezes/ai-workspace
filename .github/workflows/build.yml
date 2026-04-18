@@ -95,6 +95,7 @@ jobs:
             AI_WORKSPACE_VERSION=${{ steps.tag_version.outputs.new_version || steps.meta.outputs.version }}
             AI_WORKSPACE_COMMIT=${{ github.sha }}
             AI_WORKSPACE_BUILD_DATE=${{ steps.build_date.outputs.value }}
+            CLI_CACHE_BUSTER=${{ github.sha }}
 
       # Cria GitHub Release automaticamente.
       # Dispara em DOIS cenários:

@@ -120,7 +120,15 @@ RUN useradd -m -s /bin/zsh dev \
 
 # ══════════════════════════════════════════════════════════════
 # LAYER 5: AI CLIs (atualizam frequentemente — no fim pro cache)
+#
+# CLI_CACHE_BUSTER: invalidado em cada push pelo CI (recebe github.sha).
+# Sem isso, o cache-gha do Actions devolve eternamente a mesma versão
+# de cada CLI — o `RUN curl | bash` e os `npm install -g` não têm
+# nenhum input que mude entre builds, então hit de cache = CLIs velhas.
 # ══════════════════════════════════════════════════════════════
+
+ARG CLI_CACHE_BUSTER=dev
+RUN echo "CLI layer build: $CLI_CACHE_BUSTER"
 
 # ── Claude Code ──
 RUN curl -fsSL https://claude.ai/install.sh | bash
